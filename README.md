@@ -6,5 +6,5 @@ In progress:
 - [x] Bare-bones Qt GUI and learn to set up the Qt dev environment
 - [x] Vis class for drawing point clouds, cubes, spheres etc. in a PCLVisualizer
 - [x] Integrate Vis into the Qt GUI
-- [] Add various ICP parameters to the GUI
-- [] Bring in ICP code from previous project
+- [ ] Add various ICP parameters to the GUI
+- [ ] Bring in ICP code from previous project
