@@ -23,22 +23,31 @@ class Vis {
                      double pt_size = 1.0);
   bool addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud,
                      double pt_size = 1.0);
+  bool addPointCloud(pcl::PointCloud<pcl::PointXYZI>::ConstPtr cloud,
+                     double pt_size = 1.0);
+
   template <typename PointT>
   bool addPointCloud(typename pcl::PointCloud<PointT>::ConstPtr cloud,
                      std::vector<double> colors, double pt_size = 1.0);
+
   template <typename PointT, typename PointNT>
   bool addPointCloudNormals(typename pcl::PointCloud<PointT>::ConstPtr cloud,
                             typename pcl::PointCloud<PointNT>::ConstPtr normals);
+
   template <typename PointT>
   bool addLine(PointT p0, PointT p1,
                std::vector<double> colors = {1.0, 1.0, 0.0});
+
   bool addCube(pcl::PointXYZ min_pt, pcl::PointXYZ max_pt,
                std::vector<double> colors = {1.0, 1.0, 1.0});
+
   template<typename PointT>
   bool addSphere(PointT p, double radius = 1.0,
       std::vector<double> colors = {1, 1, 1});
+
   bool addText3D(std::string text, pcl::PointXYZ p,
                  std::vector<double> text_colors = {0.0, 1.0, 1.0});
+
   template <typename PointT>
   bool addCorrespondences(typename pcl::PointCloud<PointT>::ConstPtr source,
                           typename pcl::PointCloud<PointT>::ConstPtr target,
@@ -47,6 +56,7 @@ class Vis {
   bool addCorrespondences(typename pcl::PointCloud<PointT>::ConstPtr source,
                           typename pcl::PointCloud<PointT>::ConstPtr target,
                           std::vector<int> const &corrs, int skip = 20);
+
   void show(bool block = true);
   pcl::visualization::PCLVisualizer::Ptr const &get_viewer() {return viewer;}
 };

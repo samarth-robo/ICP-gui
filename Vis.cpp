@@ -45,6 +45,17 @@ bool Vis::addPointCloud(PointCloud<PointXYZRGB>::ConstPtr cloud, double pt_size)
   return done;
 }
 
+bool Vis::addPointCloud(PointCloud<PointXYZI>::ConstPtr cloud, double pt_size) {
+  string id = get_next_id("cloud");
+  PointCloudColorHandlerGenericField<PointXYZI> ch(cloud, "intensity");
+  bool done = viewer->addPointCloud<PointXYZI>(cloud, ch, id);
+  if (done) {
+    viewer->setPointCloudRenderingProperties(PCL_VISUALIZER_POINT_SIZE, pt_size,
+                                             id);
+  }
+  return done;
+}
+
 // Visualize point cloud with custom color handler
 template <typename PointT>
 bool Vis::addPointCloud(typename PointCloud<PointT>::ConstPtr cloud,
@@ -61,6 +72,8 @@ bool Vis::addPointCloud(typename PointCloud<PointT>::ConstPtr cloud,
 template bool Vis::addPointCloud<PointXYZ>(PointCloud<PointXYZ>::ConstPtr cloud,
                                            vector<double> colors, double pt_size);
 template bool Vis::addPointCloud<PointXYZRGB>(PointCloud<PointXYZRGB>::ConstPtr cloud,
+                                              vector<double> colors, double pt_size);
+template bool Vis::addPointCloud<PointXYZI>(PointCloud<PointXYZI>::ConstPtr cloud,
                                               vector<double> colors, double pt_size);
 
 template <typename PointT, typename PointNT>

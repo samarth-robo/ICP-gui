@@ -3,15 +3,9 @@
 
 #include <QWidget>
 
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <vtkRenderWindow.h>
-
+#include "pcl_includes.h"
 #include "Vis.h"
-
-typedef pcl::PointXYZI PointT;
-typedef pcl::PointCloud<PointT> PointCloudT;
+#include "poseestimator.h"
 
 namespace Ui {
 class PCLViewer;
@@ -26,13 +20,13 @@ public:
     ~PCLViewer();
 
 public slots:
-    void process_button_pressed() {};
+    void scene_leaf_size_changed (const QString &t);
+    void object_leaf_size_changed(const QString &t);
 
 protected:
-    boost::shared_ptr<Vis> vis;
-    PointCloudT::Ptr cloud;
-
-    float leaf_size;
+    boost::shared_ptr<Vis> scene_vis, object_vis;
+    PointCloudT::Ptr scene_cloud, object_cloud;
+    boost::shared_ptr<PoseEstimator> pe;
 
 private:
     Ui::PCLViewer *ui;
