@@ -18,17 +18,18 @@ class Vis {
   bool shown;
   std::string get_next_id(std::string word);
  public:
-  Vis(std::string window_name = std::string("cloud"));
+  Vis(std::string window_name = std::string("PCL Visualizer"));
   bool addPointCloud(pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud,
-                     double pt_size = 1.0);
+                     std::string id = std::string(), double pt_size = 1.0);
   bool addPointCloud(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud,
-                     double pt_size = 1.0);
+                     std::string id = std::string(), double pt_size = 1.0);
   bool addPointCloud(pcl::PointCloud<pcl::PointXYZI>::ConstPtr cloud,
-                     double pt_size = 1.0);
+                     std::string id = std::string(), double pt_size = 1.0);
 
   template <typename PointT>
   bool addPointCloud(typename pcl::PointCloud<PointT>::ConstPtr cloud,
-                     std::vector<double> colors, double pt_size = 1.0);
+                     std::vector<double> colors, std::string id = std::string(),
+                     double pt_size = 1.0);
 
   template <typename PointT, typename PointNT>
   bool addPointCloudNormals(typename pcl::PointCloud<PointT>::ConstPtr cloud,

@@ -4,6 +4,7 @@
 
 #include <pcl/io/pcd_io.h>
 #include <QLineEdit>
+#include <QAbstractButton>
 
 using namespace pcl;
 using namespace std;
@@ -45,8 +46,10 @@ PCLViewer::PCLViewer(QWidget *parent) :
     PCL_ERROR("Could not load file %s\n", cloud_filename);
     return;
   } else {
-    scene_vis->addPointCloud(scene_cloud);
-    cout << "Loaded scene of size" << scene_cloud->size() << endl;
+    scene_vis->addPointCloud(scene_cloud, "scene");
+    pe->set_scene(scene_cloud);
+    cout << "Loaded scene of size " << scene_cloud->width << " x "
+         << scene_cloud->height << endl;
   }
   cloud_filename = string("/home/samarth/Documents/sandbox/test_ycb_pose/"
                         "locomotive/00000.pcd");
@@ -54,8 +57,10 @@ PCLViewer::PCLViewer(QWidget *parent) :
     PCL_ERROR("Could not load file %s\n", cloud_filename);
     return;
   } else {
-    object_vis->addPointCloud(object_cloud);
-    cout << "Loaded scene of size" << object_cloud->size() << endl;
+    object_vis->addPointCloud(object_cloud, "object");
+    pe->set_object(object_cloud);
+    cout << "Loaded scene of size " << object_cloud->width << " x "
+         << object_cloud->height << endl;
   }
 
   // make signal-slot connections
@@ -63,6 +68,10 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::scene_leaf_size_changed);
   connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_leaf_size_changed);
+  connect(ui->scene_process_button, &QAbstractButton::clicked, this,
+          &PCLViewer::scene_process_clicked);
+  connect(ui->object_process_button, &QAbstractButton::clicked, this,
+          &PCLViewer::object_process_clicked);
 
 }
 
@@ -90,4 +99,16 @@ void PCLViewer::object_leaf_size_changed(const QString &t) {
   } else {
     cout << "ERROR: wrong object leaf size " << t.toStdString() << endl;
   }
+}
+
+void PCLViewer::scene_process_clicked(bool checked) {
+  auto processed_scene = pe->process_scene();
+  cout << "scene processed" << endl;
+  scene_vis->addPointCloud(processed_scene, "scene");
+}
+
+void PCLViewer::object_process_clicked(bool checked) {
+  auto processed_object = pe->process_object();
+  cout << "object processed" << endl;
+  object_vis->addPointCloud(processed_object, "object");
 }

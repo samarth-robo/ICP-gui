@@ -22,6 +22,8 @@ public:
 public slots:
     void scene_leaf_size_changed (const QString &t);
     void object_leaf_size_changed(const QString &t);
+    void scene_process_clicked(bool checked);
+    void object_process_clicked(bool checked);
 
 protected:
     boost::shared_ptr<Vis> scene_vis, object_vis;
