@@ -2,7 +2,7 @@
 Iterative Closest Point implementation with tunable parameters through a Qt GUI
 Uses [PCL's ICP](http://docs.pointclouds.org/trunk/classpcl_1_1_iterative_closest_point.html) under the hood.
 
-![Screenshot](pcl_gui.png)
+![Screenshot](pcl_gui.png?)
 
 In progress:
 - [x] Bare-bones Qt GUI and learn to set up the Qt dev environment
