@@ -27,7 +27,8 @@ set(project_SOURCES
   main.cpp
   pclviewer.cpp
   Vis.cpp
-  poseestimator.cpp)
+  poseestimator.cpp
+  mesh_sample.cpp)
 add_executable(${PROJECT_NAME} ${project_SOURCES})
 target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
 qt5_use_modules(${PROJECT_NAME} Widgets)
