@@ -52,14 +52,17 @@ class Vis {
   template <typename PointT>
   bool addCorrespondences(typename pcl::PointCloud<PointT>::ConstPtr source,
                           typename pcl::PointCloud<PointT>::ConstPtr target,
-                          pcl::CorrespondencesConstPtr const &corrs, int skip = 20);
+                          pcl::CorrespondencesConstPtr const &corrs,
+                          int skip = 20);
   template <typename PointT>
   bool addCorrespondences(typename pcl::PointCloud<PointT>::ConstPtr source,
                           typename pcl::PointCloud<PointT>::ConstPtr target,
                           std::vector<int> const &corrs, int skip = 20);
 
+  pcl::visualization::PCLVisualizer::Ptr get_viewer() {return viewer;}
+  bool removeAllPointClouds() {return viewer->removeAllPointClouds();}
+  bool removePointCloud(std::string id) {return viewer->removePointCloud(id);}
   void show(bool block = true);
-  pcl::visualization::PCLVisualizer::Ptr const &get_viewer() {return viewer;}
 };
 
 #endif //PROJECT_VIS_H

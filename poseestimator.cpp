@@ -5,6 +5,8 @@
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/surface/convex_hull.h>
+#include <pcl/registration/icp.h>
+#include <pcl/registration/transformation_estimation_svd_scale.h>
 
 using namespace pcl;
 
@@ -12,7 +14,11 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
   scene_leaf_size(0.005f), object_leaf_size(0.005f), scene_min_height(0.005f),
   scene_boxsize_x(0.25f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
-  object_init_x(0.f), object_init_y(0.f), object_init_z(0.f) {
+  object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
+  object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
+  icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
+  icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
+  icp_estimate_scale(true) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -145,6 +151,46 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
   out.block<3, 1>(0, 3) = -R.transpose() * in.block<3, 1>(0, 3);
 
   return out;
+}
+
+PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
+  PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
+  transformPointCloud(*object_processed, *out, object_pose);
+  return out;
+}
+
+// initializes the data for running ICP
+void PoseEstimator::init_icp() {
+  float s = sin(object_init_azim * float(M_PI)/180),
+      c = cos(object_init_azim * float(M_PI)/180);
+  tformT T = tformT::Identity();
+  T(0, 0) = c;
+  T(0, 1) = -s;
+  T(1, 0) = s;
+  T(1, 1) = c;
+  object_pose = T;
+}
+
+// do ICP
+void PoseEstimator::do_icp() {
+  IterativeClosestPoint<PointT, PointT> icp;
+  typedef registration::TransformationEstimationSVDScale<PointT, PointT> teSVDT;
+  teSVDT::Ptr te_svd_scale = boost::make_shared<teSVDT>();
+  icp.setInputSource(object_processed);
+  icp.setInputTarget(scene_processed);
+
+  icp.setRANSACOutlierRejectionThreshold(icp_outlier_rejection_thresh);
+  icp.setMaxCorrespondenceDistance(icp_max_corr_distance);
+  icp.setMaximumIterations(icp_n_iters);
+  icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
+  if (icp_estimate_scale) icp.setTransformationEstimation(te_svd_scale);
+
+  PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
+  icp.align(*obj_aligned, object_pose);
+  if (icp.hasConverged()) {
+    object_pose = icp.getFinalTransformation();
+    cout << "ICP converged" << endl;
+  } else console::print_error("ICP did not converge.");
 }
 
 /*

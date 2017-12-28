@@ -21,7 +21,7 @@ string Vis::get_next_id(string word) {
 Vis::Vis(string window_name) : viewer(new PCLVisualizer(window_name, false)),
                                count(0), shown(false) {
   viewer->setBackgroundColor(0, 0, 0);
-  viewer->addCoordinateSystem();
+  viewer->addCoordinateSystem(0.2);
   viewer->setShowFPS(false);
 }
 
