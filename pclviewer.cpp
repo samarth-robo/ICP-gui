@@ -43,8 +43,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   widget->update();
 
   // read the point clouds
-  string cloud_filename("/home/samarth/Documents/sandbox/test_ycb_pose/"
-                        "locomotive/00000.pcd");
+  string cloud_filename("../data/scene.pcd");
   if (io::loadPCDFile<PointT>(cloud_filename, *scene_cloud) == -1) {
     PCL_ERROR("Could not load file %s\n", cloud_filename);
     return;
@@ -54,8 +53,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
     cout << "Loaded scene of size " << scene_cloud->width << " x "
          << scene_cloud->height << endl;
   }
-  cloud_filename = string("/home/samarth/catkin_ws/src/deepgrasp_utils/data/"
-                          "ycb/locomotive/meshes/tsdf_mesh.ply");
+  cloud_filename = string("../data/object.ply");
   sample_mesh<PointT>(cloud_filename, object_cloud);
   if (object_cloud->empty()) {
     PCL_ERROR("Could not load file %s\n", cloud_filename);
