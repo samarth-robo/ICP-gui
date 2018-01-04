@@ -1,5 +1,6 @@
 #include "poseestimator.h"
 
+#include <pcl/common/common.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
@@ -115,6 +116,11 @@ void PoseEstimator::process_scene() {
   T(1, 3) = object_init_y;
   T(2, 3) = object_init_z;
   transformPointCloud(*obj, *scene_processed, invert_pose(T));
+
+  // measure its size along X axis
+  PointT min_pt, max_pt;
+  getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
+  x_size = fabs(max_pt.x - min_pt.x);
 }
 
 void PoseEstimator::process_object() {
@@ -125,7 +131,17 @@ void PoseEstimator::process_object() {
 
   // orient by tabletop
   tformT T = get_tabletop_rot();
-  transformPointCloud(*subs, *object_processed, T);
+  PointCloudT::Ptr osubs = boost::make_shared<PointCloudT>();
+  transformPointCloud(*subs, *osubs, T);
+
+  // scale by size of object in scene
+  PointT min_pt, max_pt;
+  getMinMax3D<PointT>(*osubs, min_pt, max_pt);
+  float scale = x_size / fabs(max_pt.x - min_pt.x);
+  T = tformT::Identity();
+  T(0, 0) = T(1, 1) = T(2, 2) = scale;
+  transformPointCloud(*osubs, *object_processed, T);
+  cout << "Scaled object by " << scale << "x" << endl;
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {

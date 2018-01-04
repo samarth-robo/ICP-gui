@@ -72,6 +72,7 @@ private:
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_hull_points;
   tformT object_pose;
+  float x_size;  // size of object along X axis in the scene
 };
 
 #endif // POSEESTIMATOR_H
