@@ -17,7 +17,7 @@ Progress:
 - [x] Integrate Vis into the Qt GUI
 - [x] Add various ICP parameters to the GUI
 - [x] Bring in ICP code from previous project
-- [ ] Tune ICP to work for the example included in the `data` folder
+- [x] Tune ICP to work for the example included in the `data` folder
 - [ ] Implement function for saving the pose estimation output
 
 ## Description
