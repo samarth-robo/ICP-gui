@@ -19,7 +19,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
   icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(true) {
+  icp_estimate_scale(false) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -207,6 +207,37 @@ void PoseEstimator::do_icp() {
     object_pose = icp.getFinalTransformation();
     cout << "ICP converged" << endl;
   } else console::print_error("ICP did not converge.");
+}
+
+bool PoseEstimator::write_pose_file(std::string filename) {
+  ofstream f(filename);
+  if (!f.is_open()) {
+    cout << "Could not open " << filename << " for writing" << endl;
+    return false;
+  }
+
+  tformT T = invert_pose(object_pose);
+
+  f << "# translations" << endl;
+  f << T(0, 3) << endl;
+  f << T(1, 3) << endl;
+  f << T(2, 3) << endl << endl;
+
+  f << "# rotations" << endl;
+  f << T(0, 0) << " " << T(0, 1) << " " << T(0, 2) << endl;
+  f << T(1, 0) << " " << T(1, 1) << " " << T(1, 2) << endl;
+  f << T(2, 0) << " " << T(2, 1) << " " << T(2, 2) << endl << endl;
+
+  f << "# camera params" << endl;
+  f << 1.79099426e+03 << endl;  // fx
+  f << 6.41561762e+02 << endl;  // fy
+  f << 1.04290013e+03 << endl;  // cx
+  f << 2.29762406e+02 << endl;  // cy
+  f << 960 << endl;  // width
+  f << 540 << endl;  // height
+
+  f.close();
+  return true;
 }
 
 /*

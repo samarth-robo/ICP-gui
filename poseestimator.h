@@ -52,6 +52,7 @@ public:
   void process_object();
   void init_icp();
   void do_icp();
+  bool write_pose_file(std::string filename = std::string("pose.txt"));
 
 private:
   // pose util functions

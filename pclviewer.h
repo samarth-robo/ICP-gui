@@ -36,6 +36,7 @@ public slots:
     void object_process_clicked(bool checked);
     void icp_init_clicked(bool checked);
     void icp_process_clicked(bool checked);
+    void icp_save_clicked(bool checked);
 
 protected:
     boost::shared_ptr<Vis> scene_vis, object_vis, icp_vis;

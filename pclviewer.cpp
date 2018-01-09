@@ -123,6 +123,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_init_clicked);
   connect(ui->icp_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::icp_process_clicked);
+  connect(ui->icp_save_button, &QAbstractButton::clicked, this,
+          &PCLViewer::icp_save_clicked);
 }
 
 PCLViewer::~PCLViewer() {
@@ -313,4 +315,10 @@ void PCLViewer::icp_init_clicked(bool checked) {
 void PCLViewer::icp_process_clicked(bool checked) {
   pe->do_icp();
   refresh_icp_viewer();
+}
+
+void PCLViewer::icp_save_clicked(bool checked) {
+  string filename("pose.txt");
+  if (pe->write_pose_file(filename))
+    cout << filename << " written" << endl;
 }
