@@ -18,7 +18,7 @@ Progress:
 - [x] Add various ICP parameters to the GUI
 - [x] Bring in ICP code from previous project
 - [x] Tune ICP to work for the example included in the `data` folder
-- [ ] Implement function for saving the pose estimation output
+- [x] Implement function for saving the pose estimation output
 
 ## Description
 This project is about estimating the 6 DoF pose of an object in a scene, given the 3D model of the object. The [Qt library](https://www.qt.io/) is used to make the whole process interactive. Steps:
