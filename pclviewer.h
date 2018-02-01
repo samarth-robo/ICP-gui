@@ -33,6 +33,9 @@ public slots:
     void icp_recip_corr_clicked(int state);
     void icp_estimate_scale_clicked(int state);
     void scene_process_clicked(bool checked);
+    void object_scale_x_clicked(bool checked);
+    void object_scale_y_clicked(bool checked);
+    void object_scale_z_clicked(bool checked);
     void object_process_clicked(bool checked);
     void icp_init_clicked(bool checked);
     void icp_process_clicked(bool checked);

@@ -26,6 +26,7 @@ public:
   void set_icp_corr_dist(float s)    {icp_max_corr_distance = s;}
   void set_icp_use_recip_corr(bool s){icp_use_reciprocal_corr = s;}
   void set_icp_estimate_scale(bool s){icp_estimate_scale = s;}
+  void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
 
@@ -44,6 +45,7 @@ public:
   float get_icp_corr_dist()      {return icp_max_corr_distance;}
   bool  get_icp_use_recip_corr() {return icp_use_reciprocal_corr;}
   bool  get_icp_estimate_scale() {return icp_estimate_scale;}
+  char  get_scale_axis()         {return scale_axis;}
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
 
@@ -73,7 +75,8 @@ private:
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_hull_points;
   tformT object_pose;
-  float x_size;  // size of object along X axis in the scene
+  float axis_size;  // size of object along an axis in the scene
+  char scale_axis;  // which axis to use for scaling
 };
 
 #endif // POSEESTIMATOR_H

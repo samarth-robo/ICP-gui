@@ -19,7 +19,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
   icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(false) {
+  icp_estimate_scale(false), scale_axis('x') {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -120,7 +120,17 @@ void PoseEstimator::process_scene() {
   // measure its size along X axis
   PointT min_pt, max_pt;
   getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
-  x_size = fabs(max_pt.x - min_pt.x);
+  switch (scale_axis) {
+  case 'x':
+      axis_size = fabs(max_pt.x - min_pt.x);
+      break;
+  case 'y':
+      axis_size = fabs(max_pt.y - min_pt.y);
+      break;
+  case 'z':
+      axis_size = fabs(max_pt.z - min_pt.z);
+      break;
+  }
 }
 
 void PoseEstimator::process_object() {
@@ -137,7 +147,18 @@ void PoseEstimator::process_object() {
   // scale by size of object in scene
   PointT min_pt, max_pt;
   getMinMax3D<PointT>(*osubs, min_pt, max_pt);
-  float scale = x_size / fabs(max_pt.x - min_pt.x);
+  float scale = axis_size;
+  switch (scale_axis) {
+  case 'x':
+      scale /= fabs(max_pt.x - min_pt.x);
+      break;
+  case 'y':
+      scale /= fabs(max_pt.y - min_pt.y);
+      break;
+  case 'z':
+      scale /= fabs(max_pt.z - min_pt.z);
+      break;
+  }
   T = tformT::Identity();
   T(0, 0) = T(1, 1) = T(2, 2) = scale;
   transformPointCloud(*osubs, *object_processed, T);

@@ -89,6 +89,16 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->icp_corr_dist_line_edit->setText(s);
   ui->icp_recip_corr_checkbox->setChecked(pe->get_icp_use_recip_corr());
   ui->icp_estimate_scale_checkbox->setChecked(pe->get_icp_estimate_scale());
+  switch (pe->get_scale_axis()) {
+   case 'x':
+      ui->object_scale_x_radiobutton->setChecked(true);
+      break;
+   case 'y':
+      ui->object_scale_y_radiobutton->setChecked(true);
+      break;
+   case 'z':
+      ui->object_scale_z_radiobutton->setChecked(true);
+  }
 
   // make signal-slot connections
   connect(ui->scene_leaf_size_line_edit, &QLineEdit::textEdited, this,
@@ -115,6 +125,12 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_recip_corr_clicked);
   connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_estimate_scale_clicked);
+  connect(ui->object_scale_x_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_x_clicked);
+  connect(ui->object_scale_y_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_y_clicked);
+  connect(ui->object_scale_z_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_z_clicked);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_process_clicked);
   connect(ui->object_process_button, &QAbstractButton::clicked, this,
@@ -284,6 +300,21 @@ void PCLViewer::scene_process_clicked(bool checked) {
   scene_processed = true;
   cout << "scene processed" << endl;
   scene_vis->addPointCloud(pe->get_processed_scene(), "scene");
+}
+
+void PCLViewer::object_scale_x_clicked(bool checked) {
+    pe->set_scale_axis('x');
+    cout << "Scaling object using X axis" << endl;
+}
+
+void PCLViewer::object_scale_y_clicked(bool checked) {
+    pe->set_scale_axis('y');
+    cout << "Scaling object using Y axis" << endl;
+}
+
+void PCLViewer::object_scale_z_clicked(bool checked) {
+    pe->set_scale_axis('z');
+    cout << "Scaling object using Z axis" << endl;
 }
 
 void PCLViewer::object_process_clicked(bool checked) {
