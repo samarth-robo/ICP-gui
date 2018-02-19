@@ -37,6 +37,8 @@ public:
   float get_scene_boxsize_x()    {return scene_boxsize_x;}
   float get_scene_boxsize_y()    {return scene_boxsize_y;}
   float get_scene_boxsize_z()    {return scene_boxsize_z;}
+  pcl::PointXYZ get_scene_box_min_pt();
+  pcl::PointXYZ get_scene_box_max_pt();
   float get_object_init_x()      {return object_init_x;}
   float get_object_init_y()      {return object_init_y;}
   float get_object_init_z()      {return object_init_z;}

@@ -32,6 +32,7 @@ public slots:
     void icp_outlier_dist_changed(const QString &t);
     void icp_recip_corr_clicked(int state);
     void icp_estimate_scale_clicked(int state);
+    void scene_draw_box_clicked(bool checked);
     void scene_process_clicked(bool checked);
     void object_scale_x_clicked(bool checked);
     void object_scale_y_clicked(bool checked);

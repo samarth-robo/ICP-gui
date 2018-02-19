@@ -133,6 +133,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::object_scale_z_clicked);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_process_clicked);
+  connect(ui->scene_draw_box_button, &QAbstractButton::clicked, this,
+          &PCLViewer::scene_draw_box_clicked);
   connect(ui->object_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::object_process_clicked);
   connect(ui->icp_init_button, &QAbstractButton::clicked, this,
@@ -315,6 +317,14 @@ void PCLViewer::object_scale_y_clicked(bool checked) {
 void PCLViewer::object_scale_z_clicked(bool checked) {
     pe->set_scale_axis('z');
     cout << "Scaling object using Z axis" << endl;
+}
+
+void PCLViewer::scene_draw_box_clicked(bool checked) {
+    auto min_pt = pe->get_scene_box_min_pt();
+    auto max_pt = pe->get_scene_box_max_pt();
+    scene_vis->removeAllShapes();
+    scene_vis->addCube(min_pt, max_pt);
+    cout << "Box drawn" << endl;
 }
 
 void PCLViewer::object_process_clicked(bool checked) {

@@ -46,6 +46,22 @@ void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object_vox.setInputCloud(object);
 }
 
+PointXYZ PoseEstimator::get_scene_box_min_pt() {
+    PointXYZ p;
+    p.x = object_init_x - scene_boxsize_x/2;
+    p.y = object_init_y - scene_boxsize_y/2;
+    p.z = object_init_z - scene_boxsize_z/2;
+    return p;
+}
+
+PointXYZ PoseEstimator::get_scene_box_max_pt() {
+    PointXYZ p;
+    p.x = object_init_x + scene_boxsize_x/2;
+    p.y = object_init_y + scene_boxsize_y/2;
+    p.z = object_init_z + scene_boxsize_z/2;
+    return p;
+}
+
 void PoseEstimator::process_scene() {
   // subsample using voxel grid
   scene_vox.setLeafSize(scene_leaf_size, scene_leaf_size, scene_leaf_size);

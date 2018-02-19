@@ -62,6 +62,7 @@ class Vis {
   pcl::visualization::PCLVisualizer::Ptr get_viewer() {return viewer;}
   bool removeAllPointClouds() {return viewer->removeAllPointClouds();}
   bool removePointCloud(std::string id) {return viewer->removePointCloud(id);}
+  bool removeAllShapes() {return viewer->removeAllShapes();}
   void show(bool block = true);
 };
 

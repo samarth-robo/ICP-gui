@@ -348,6 +348,13 @@
       </layout>
      </item>
      <item>
+      <widget class="QPushButton" name="scene_draw_box_button">
+       <property name="text">
+        <string>Draw Box</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="scene_process_button">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
