@@ -7,9 +7,12 @@
 #include <QLineEdit>
 #include <QAbstractButton>
 #include <QCheckBox>
+#include <QFileDialog>
+#include <QComboBox>
 
 using namespace pcl;
 using namespace std;
+namespace bfs = boost::filesystem;
 
 PCLViewer::PCLViewer(QWidget *parent) :
   QWidget(parent),
@@ -18,7 +21,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
   icp_vis(new Vis("ICP")),
   pe(new PoseEstimator()),
-  scene_processed(false), object_processed(false) {
+  scene_processed(false), object_processed(false),
+  root_dir("../data/"), scene_filename("scene.pcd") {
   ui->setupUi(this);
   this->setWindowTitle("ICP GUI");
 
@@ -41,29 +45,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   widget->SetRenderWindow(viewer->getRenderWindow());
   viewer->setupInteractor(widget->GetInteractor(), widget->GetRenderWindow());
   widget->update();
-
-  // read the point clouds
-  string cloud_filename("../data/scene.pcd");
-  if (io::loadPCDFile<PointT>(cloud_filename, *scene_cloud) == -1) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename);
-    return;
-  } else {
-    scene_vis->addPointCloud(scene_cloud, "scene");
-    pe->set_scene(scene_cloud);
-    cout << "Loaded scene of size " << scene_cloud->width << " x "
-         << scene_cloud->height << endl;
-  }
-  cloud_filename = string("../data/object.ply");
-  sample_mesh<PointT>(cloud_filename, object_cloud);
-  if (object_cloud->empty()) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename);
-    return;
-  } else {
-    object_vis->addPointCloud(object_cloud, "object");
-    pe->set_object(object_cloud);
-    cout << "Loaded object of size " << object_cloud->width << " x "
-         << object_cloud->height << endl;
-  }
+  init_viewers();
 
   // fill out various line edits
   QString s;
@@ -143,10 +125,40 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_process_clicked);
   connect(ui->icp_save_button, &QAbstractButton::clicked, this,
           &PCLViewer::icp_save_clicked);
+  connect(ui->dir_select_button, &QAbstractButton::clicked, this,
+          &PCLViewer::dir_select_clicked);
+  connect(ui->scene_select_combo_box,
+          static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
+          this, &PCLViewer::scene_select_combo_box_activated);
 }
 
 PCLViewer::~PCLViewer() {
     delete ui;
+}
+
+void PCLViewer::init_viewers() {
+  // read the point clouds
+  string cloud_filename = root_dir + string("/pointclouds/") + scene_filename;
+  if (io::loadPCDFile<PointT>(cloud_filename, *scene_cloud) == -1) {
+    PCL_ERROR("Could not load file %s\n", cloud_filename);
+    return;
+  } else {
+    scene_vis->addPointCloud(scene_cloud, "scene");
+    pe->set_scene(scene_cloud);
+    cout << "Loaded scene of size " << scene_cloud->width << " x "
+         << scene_cloud->height << endl;
+  }
+  cloud_filename = root_dir + string("/object.ply");
+  sample_mesh<PointT>(cloud_filename, object_cloud);
+  if (object_cloud->empty()) {
+    PCL_ERROR("Could not load file %s\n", cloud_filename);
+    return;
+  } else {
+    object_vis->addPointCloud(object_cloud, "object");
+    pe->set_object(object_cloud);
+    cout << "Loaded object of size " << object_cloud->width << " x "
+         << object_cloud->height << endl;
+  }
 }
 
 void PCLViewer::scene_leaf_size_changed(const QString &t) {
@@ -362,4 +374,43 @@ void PCLViewer::icp_save_clicked(bool checked) {
   string filename("pose.txt");
   if (pe->write_pose_file(filename))
     cout << filename << " written" << endl;
+}
+
+void PCLViewer::dir_select_clicked(bool checked) {
+  QFileDialog dialog(this);
+  dialog.setFileMode(QFileDialog::Directory);
+  dialog.setViewMode(QFileDialog::Detail);
+  QStringList dir;
+  bool done = false;
+  while (!done) {
+    if (dialog.exec()) {
+      dir = dialog.selectedFiles();
+      root_dir = dir[0].toStdString();
+      done = true;
+    }
+  }
+  cout << "Root directory set to " << root_dir << endl;
+
+  // refresh combo-box and populate with list of pcds in directory
+  QComboBox *cb = ui->scene_select_combo_box;
+  cb->clear();
+  bfs::path root(root_dir+string("/pointclouds"));
+  if (bfs::is_directory(root)) {
+    for (auto it : bfs::directory_iterator(root)) {
+      string filename = it.path().filename().string();
+      cb->addItem(QString(filename.c_str()));
+      cout << "Found " << filename << endl;
+    }
+    cout << "Please select one from the combo-box" << endl;
+  } else {
+    cout << "WARN: 'pointclouds' directory not found in " << root_dir << endl;
+    return;
+  }
+}
+
+void PCLViewer::scene_select_combo_box_activated(const QString &text) {
+  scene_filename = text.toStdString();
+  init_viewers();
+  cout << "Scene set to " << root_dir + string("/pointclouds/") + scene_filename
+       << endl;
 }

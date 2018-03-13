@@ -6,6 +6,7 @@
 #include "pcl_includes.h"
 #include "Vis.h"
 #include "poseestimator.h"
+#include <string>
 
 namespace Ui {
 class PCLViewer;
@@ -20,6 +21,8 @@ public:
     ~PCLViewer();
 
 public slots:
+    void dir_select_clicked(bool checked);
+    void scene_select_combo_box_activated(const QString &text);
     void scene_leaf_size_changed(const QString &t);
     void object_leaf_size_changed(const QString &t);
     void scene_min_height_changed(const QString &t);
@@ -51,6 +54,8 @@ protected:
 private:
     Ui::PCLViewer *ui;
     void refresh_icp_viewer();
+    void init_viewers();
+    std::string root_dir, scene_filename;
 };
 
 #endif // PCLVIEWER_H
