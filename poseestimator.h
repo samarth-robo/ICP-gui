@@ -55,7 +55,7 @@ public:
   void process_scene();
   void process_object();
   void init_icp();
-  void do_icp();
+  bool do_icp();
   bool write_pose_file(std::string filename = std::string("pose.txt"));
 
 private:
@@ -76,7 +76,7 @@ private:
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_hull_points;
-  tformT object_pose;
+  tformT object_pose, object_azim;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
 };

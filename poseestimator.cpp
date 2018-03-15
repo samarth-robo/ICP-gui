@@ -5,6 +5,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/surface/convex_hull.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/transformation_estimation_svd_scale.h>
@@ -19,7 +20,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
   icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(false), scale_axis('x') {
+  icp_estimate_scale(false), scale_axis('x'),
+  object_azim(PoseEstimator::tformT::Identity()) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -49,7 +51,8 @@ void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
 PointXYZ PoseEstimator::get_scene_box_min_pt() {
     PointXYZ p;
     p.x = object_init_x - scene_boxsize_x/2;
-    p.y = object_init_y - scene_boxsize_y/2;
+    // p.y = object_init_y - scene_boxsize_y;
+    p.y = object_init_y - 0.15;
     p.z = object_init_z - scene_boxsize_z/2;
     return p;
 }
@@ -57,7 +60,8 @@ PointXYZ PoseEstimator::get_scene_box_min_pt() {
 PointXYZ PoseEstimator::get_scene_box_max_pt() {
     PointXYZ p;
     p.x = object_init_x + scene_boxsize_x/2;
-    p.y = object_init_y + scene_boxsize_y/2;
+    // p.y = object_init_y + scene_boxsize_y/2;
+    p.y = object_init_y + 0.05;
     p.z = object_init_z + scene_boxsize_z/2;
     return p;
 }
@@ -71,10 +75,8 @@ void PoseEstimator::process_scene() {
   // crop box
   CropBox<PointT> box;
   box.setInputCloud(subs);
-  Eigen::Vector4f box_size(scene_boxsize_x, scene_boxsize_y,
-                           scene_boxsize_z, 0.f);
-  box.setMin(-box_size/2);
-  box.setMax(box_size/2);
+  box.setMin(Eigen::Vector4f(-scene_boxsize_x/2, -0.15, -scene_boxsize_z/2, 0));
+  box.setMax(Eigen::Vector4f(+scene_boxsize_x/2, 0.05, +scene_boxsize_z/2, 0));
   box.setTranslation(Eigen::Vector3f(object_init_x, object_init_y,
                                      object_init_z));
   PointCloudT::Ptr cbox = boost::make_shared<PointCloudT>();
@@ -82,7 +84,7 @@ void PoseEstimator::process_scene() {
   // box.filter(*scene_processed);
   // return;
 
-   // estimate the plane
+  // estimate the plane
   console::print_info("Estimating plane...");
   PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
   SACSegmentation<PointT> plane_seg;
@@ -126,12 +128,20 @@ void PoseEstimator::process_scene() {
   extract.setIndices(idx);
   extract.filter(*obj);
 
+  // remove noise
+  StatisticalOutlierRemoval<PointT> sor;
+  sor.setInputCloud(obj);
+  sor.setMeanK(50);
+  sor.setStddevMulThresh(1.0);
+  PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
+  sor.filter(*obj_filt);
+
   // transform by object init position
   tformT T = tformT::Identity();
   T(0, 3) = object_init_x;
   T(1, 3) = object_init_y;
   T(2, 3) = object_init_z;
-  transformPointCloud(*obj, *scene_processed, invert_pose(T));
+  transformPointCloud(*obj_filt, *scene_processed, invert_pose(T));
 
   // measure its size along X axis
   PointT min_pt, max_pt;
@@ -152,17 +162,14 @@ void PoseEstimator::process_scene() {
 void PoseEstimator::process_object() {
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
-  PointCloudT::Ptr subs = boost::make_shared<PointCloudT>();
-  object_vox.filter(*subs);
+  object_vox.filter(*object_processed);
 
   // orient by tabletop
-  tformT T = get_tabletop_rot();
-  PointCloudT::Ptr osubs = boost::make_shared<PointCloudT>();
-  transformPointCloud(*subs, *osubs, T);
+  object_pose = get_tabletop_rot();
 
   // scale by size of object in scene
   PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*osubs, min_pt, max_pt);
+  getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
   float scale = axis_size;
   switch (scale_axis) {
   case 'x':
@@ -175,10 +182,10 @@ void PoseEstimator::process_object() {
       scale /= fabs(max_pt.z - min_pt.z);
       break;
   }
-  T = tformT::Identity();
+  tformT T = tformT::Identity();
   T(0, 0) = T(1, 1) = T(2, 2) = scale;
-  transformPointCloud(*osubs, *object_processed, T);
   cout << "Scaled object by " << scale << "x" << endl;
+  object_pose = T * object_pose;
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
@@ -208,7 +215,7 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 
 PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
-  transformPointCloud(*object_processed, *out, object_pose);
+  transformPointCloud(*object_processed, *out, object_pose*object_azim);
   return out;
 }
 
@@ -216,19 +223,21 @@ PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
 void PoseEstimator::init_icp() {
   float s = sin(object_init_azim * float(M_PI)/180),
       c = cos(object_init_azim * float(M_PI)/180);
-  tformT T = tformT::Identity();
-  T(0, 0) = c;
-  T(0, 1) = -s;
-  T(1, 0) = s;
-  T(1, 1) = c;
-  object_pose = T;
+  object_azim = tformT::Identity();
+  object_azim(0, 0) = c;
+  object_azim(0, 1) = -s;
+  object_azim(1, 0) = s;
+  object_azim(1, 1) = c;
 }
 
 // do ICP
-void PoseEstimator::do_icp() {
+bool PoseEstimator::do_icp() {
   IterativeClosestPoint<PointT, PointT> icp;
   typedef registration::TransformationEstimationSVDScale<PointT, PointT> teSVDT;
   teSVDT::Ptr te_svd_scale = boost::make_shared<teSVDT>();
+  transformPointCloud(*object_processed, *object_processed,
+                      object_pose*object_azim);
+  object_pose = object_azim = tformT::Identity();
   icp.setInputSource(object_processed);
   icp.setInputTarget(scene_processed);
 
@@ -239,11 +248,15 @@ void PoseEstimator::do_icp() {
   if (icp_estimate_scale) icp.setTransformationEstimation(te_svd_scale);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
-  icp.align(*obj_aligned, object_pose);
+  icp.align(*obj_aligned);
   if (icp.hasConverged()) {
     object_pose = icp.getFinalTransformation();
     cout << "ICP converged" << endl;
-  } else console::print_error("ICP did not converge.");
+    return true;
+  } else {
+    console::print_error("ICP did not converge.");
+    return false;
+  }
 }
 
 bool PoseEstimator::write_pose_file(std::string filename) {

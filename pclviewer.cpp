@@ -313,6 +313,7 @@ void PCLViewer::scene_process_clicked(bool checked) {
   pe->process_scene();
   scene_processed = true;
   cout << "scene processed" << endl;
+  scene_vis->removeAllPointClouds();
   scene_vis->addPointCloud(pe->get_processed_scene(), "scene");
 }
 
@@ -344,6 +345,7 @@ void PCLViewer::object_process_clicked(bool checked) {
     pe->process_object();
     object_processed = true;
     cout << "object processed" << endl;
+    object_vis->removeAllPointClouds();
     object_vis->addPointCloud(pe->get_processed_object(), "object");
   } else cout << "WARN: process scene first!" << endl;
 }
@@ -366,8 +368,10 @@ void PCLViewer::icp_init_clicked(bool checked) {
 }
 
 void PCLViewer::icp_process_clicked(bool checked) {
-  pe->do_icp();
-  refresh_icp_viewer();
+  if (pe->do_icp()) {
+    refresh_icp_viewer();
+    object_processed = false;
+  }
 }
 
 void PCLViewer::icp_save_clicked(bool checked) {
