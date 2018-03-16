@@ -50,13 +50,14 @@ public:
   char  get_scale_axis()         {return scale_axis;}
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
+  PointCloudT::ConstPtr get_scene() {return scene;}
 
   // other functions
   void process_scene();
   void process_object();
   void init_icp();
   bool do_icp();
-  bool write_pose_file(std::string filename = std::string("pose.txt"));
+  bool write_pose_file(std::string pose_filename, std::string scale_filename);
 
 private:
   // pose util functions
@@ -76,7 +77,7 @@ private:
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_hull_points;
-  tformT object_pose, object_azim;
+  tformT object_pose, object_azim, object_scale;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
 };

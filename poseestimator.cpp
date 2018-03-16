@@ -10,6 +10,8 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/transformation_estimation_svd_scale.h>
 
+#include <fstream>
+
 using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
@@ -21,7 +23,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
   icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
   icp_estimate_scale(false), scale_axis('x'),
-  object_azim(PoseEstimator::tformT::Identity()) {
+  object_azim(PoseEstimator::tformT::Identity()),
+  object_scale(PoseEstimator::tformT::Identity()) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -182,10 +185,9 @@ void PoseEstimator::process_object() {
       scale /= fabs(max_pt.z - min_pt.z);
       break;
   }
-  tformT T = tformT::Identity();
-  T(0, 0) = T(1, 1) = T(2, 2) = scale;
+  object_scale = tformT::Identity();
+  object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   cout << "Scaled object by " << scale << "x" << endl;
-  object_pose = T * object_pose;
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
@@ -215,7 +217,8 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 
 PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
-  transformPointCloud(*object_processed, *out, object_pose*object_azim);
+  tformT T = object_pose * object_azim * object_scale;
+  transformPointCloud(*object_processed, *out, T);
   return out;
 }
 
@@ -235,10 +238,10 @@ bool PoseEstimator::do_icp() {
   IterativeClosestPoint<PointT, PointT> icp;
   typedef registration::TransformationEstimationSVDScale<PointT, PointT> teSVDT;
   teSVDT::Ptr te_svd_scale = boost::make_shared<teSVDT>();
-  transformPointCloud(*object_processed, *object_processed,
-                      object_pose*object_azim);
-  object_pose = object_azim = tformT::Identity();
-  icp.setInputSource(object_processed);
+  PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
+  transformPointCloud(*object_processed, *obj_input,
+                      object_pose*object_azim*object_scale);
+  icp.setInputSource(obj_input);
   icp.setInputTarget(scene_processed);
 
   icp.setRANSACOutlierRejectionThreshold(icp_outlier_rejection_thresh);
@@ -250,7 +253,11 @@ bool PoseEstimator::do_icp() {
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);
   if (icp.hasConverged()) {
-    object_pose = icp.getFinalTransformation();
+    tformT T = icp.getFinalTransformation();
+    object_pose = T * object_pose;
+    object_pose(0, 3) += object_init_x;
+    object_pose(1, 3) += object_init_y;
+    object_pose(2, 3) += object_init_z;
     cout << "ICP converged" << endl;
     return true;
   } else {
@@ -259,34 +266,27 @@ bool PoseEstimator::do_icp() {
   }
 }
 
-bool PoseEstimator::write_pose_file(std::string filename) {
-  ofstream f(filename);
+bool PoseEstimator::write_pose_file(std::string pose_filename,
+                                    std::string scale_filename) {
+  Eigen::Quaternionf q(object_pose.block<3, 3>(0, 0));
+
+  ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
-    cout << "Could not open " << filename << " for writing" << endl;
+    cout << "Could not open " << pose_filename << " for appending" << endl;
     return false;
   }
-
-  tformT T = invert_pose(object_pose);
-
-  f << "# translations" << endl;
-  f << T(0, 3) << endl;
-  f << T(1, 3) << endl;
-  f << T(2, 3) << endl << endl;
-
-  f << "# rotations" << endl;
-  f << T(0, 0) << " " << T(0, 1) << " " << T(0, 2) << endl;
-  f << T(1, 0) << " " << T(1, 1) << " " << T(1, 2) << endl;
-  f << T(2, 0) << " " << T(2, 1) << " " << T(2, 2) << endl << endl;
-
-  f << "# camera params" << endl;
-  f << 1.79099426e+03 << endl;  // fx
-  f << 6.41561762e+02 << endl;  // fy
-  f << 1.04290013e+03 << endl;  // cx
-  f << 2.29762406e+02 << endl;  // cy
-  f << 960 << endl;  // width
-  f << 540 << endl;  // height
-
+  f << object_pose(0, 3) << " " << object_pose(1, 3) << " " << object_pose(2, 3)
+    << " " << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << endl;
   f.close();
+
+  f.open(scale_filename);
+  if (!f.is_open()) {
+    cout << "Could not open " << scale_filename << " for writing" << endl;
+    return false;
+  }
+  f << object_scale(0, 0) << endl;
+  f.close();
+
   return true;
 }
 

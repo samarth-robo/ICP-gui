@@ -350,10 +350,14 @@ void PCLViewer::object_process_clicked(bool checked) {
   } else cout << "WARN: process scene first!" << endl;
 }
 
-void PCLViewer::refresh_icp_viewer() {
+void PCLViewer::refresh_icp_viewer(bool whole_scene) {
   icp_vis->removeAllPointClouds();
-  icp_vis->addPointCloud<PointT>(pe->get_processed_scene(), {0, 1, 0},
-                                 "scene");
+  if (whole_scene)
+    icp_vis->addPointCloud<PointT>(pe->get_scene(), {0, 1, 0},
+                                   "scene");
+  else
+    icp_vis->addPointCloud<PointT>(pe->get_processed_scene(), {0, 1, 0},
+                                   "scene");
   icp_vis->addPointCloud<PointT>(pe->get_processed_object(), {1, 0, 0},
                                  "object");
 }
@@ -368,16 +372,23 @@ void PCLViewer::icp_init_clicked(bool checked) {
 }
 
 void PCLViewer::icp_process_clicked(bool checked) {
-  if (pe->do_icp()) {
-    refresh_icp_viewer();
-    object_processed = false;
-  }
+  if (scene_processed) {
+    if (object_processed) {
+      if (pe->do_icp()) {
+        refresh_icp_viewer(true);
+        object_processed = false;
+      }
+    } else cout << "WARN: process object first!" << endl;
+  } else cout << "WARN: process scene first!" << endl;
 }
 
 void PCLViewer::icp_save_clicked(bool checked) {
-  string filename("pose.txt");
-  if (pe->write_pose_file(filename))
-    cout << filename << " written" << endl;
+  string scene_name = scene_filename.substr(0, scene_filename.find("."));
+  string pose_filename = root_dir + string("/poses/") + scene_name +
+      string(".txt");
+  string scale_filename = root_dir + string("/scale.txt");
+  if (pe->write_pose_file(pose_filename, scale_filename))
+    cout << pose_filename << " and " << scale_filename << " written" << endl;
 }
 
 void PCLViewer::dir_select_clicked(bool checked) {
@@ -405,7 +416,8 @@ void PCLViewer::dir_select_clicked(bool checked) {
       cb->addItem(QString(filename.c_str()));
       cout << "Found " << filename << endl;
     }
-    cout << "Please select one from the combo-box" << endl;
+    // load the first pointcloud
+    scene_select_combo_box_activated(ui->scene_select_combo_box->itemText(0));
   } else {
     cout << "WARN: 'pointclouds' directory not found in " << root_dir << endl;
     return;

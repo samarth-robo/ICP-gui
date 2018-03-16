@@ -53,7 +53,7 @@ protected:
 
 private:
     Ui::PCLViewer *ui;
-    void refresh_icp_viewer();
+    void refresh_icp_viewer(bool whole_scene = false);
     void init_viewers();
     std::string root_dir, scene_filename;
 };
