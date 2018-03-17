@@ -55,7 +55,7 @@ public:
   // other functions
   void process_scene();
   void process_object();
-  void init_icp();
+  void init_icp(std::string tt_base_filename);
   bool do_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
 

@@ -16,8 +16,8 @@ using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
-  scene_leaf_size(0.005f), object_leaf_size(0.005f), scene_min_height(0.005f),
-  scene_boxsize_x(0.25f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
+  scene_leaf_size(0.001f), object_leaf_size(0.001f), scene_min_height(0.005f),
+  scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
@@ -223,7 +223,8 @@ PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
 }
 
 // initializes the data for running ICP
-void PoseEstimator::init_icp() {
+void PoseEstimator::init_icp(std::string filename) {
+  // object initial azimuth angle
   float s = sin(object_init_azim * float(M_PI)/180),
       c = cos(object_init_azim * float(M_PI)/180);
   object_azim = tformT::Identity();
@@ -231,6 +232,17 @@ void PoseEstimator::init_icp() {
   object_azim(0, 1) = -s;
   object_azim(1, 0) = s;
   object_azim(1, 1) = c;
+
+  // save rotation of the turntable base
+  Eigen::Quaternionf q(object_pose.block<3, 3>(0, 0));
+  ofstream f(filename, std::ios_base::app);
+  if (!f.is_open()) {
+    cout << "Could not open " << filename << " for appending" << endl;
+    return;
+  }
+  f << " " << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << endl;
+  f.close();
+  cout << "Turntable base rotation appended to " << filename << endl;
 }
 
 // do ICP

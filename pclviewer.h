@@ -49,7 +49,7 @@ protected:
     boost::shared_ptr<Vis> scene_vis, object_vis, icp_vis;
     PointCloudT::Ptr scene_cloud, object_cloud;
     boost::shared_ptr<PoseEstimator> pe;
-    bool scene_processed, object_processed;
+    bool scene_processed, object_processed, icp_initialized;
 
 private:
     Ui::PCLViewer *ui;

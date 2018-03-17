@@ -21,7 +21,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
   icp_vis(new Vis("ICP")),
   pe(new PoseEstimator()),
-  scene_processed(false), object_processed(false),
+  scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
   ui->setupUi(this);
   this->setWindowTitle("ICP GUI");
@@ -365,7 +365,9 @@ void PCLViewer::refresh_icp_viewer(bool whole_scene) {
 void PCLViewer::icp_init_clicked(bool checked) {
   if (scene_processed) {
     if (object_processed) {
-      pe->init_icp();
+      string tt_base_filename = root_dir + string("/poses/tt_base.txt");
+      pe->init_icp(tt_base_filename);
+      icp_initialized = true;
       refresh_icp_viewer();
     } else cout << "WARN: process object first!" << endl;
   } else cout << "WARN: process scene first!" << endl;
@@ -374,17 +376,19 @@ void PCLViewer::icp_init_clicked(bool checked) {
 void PCLViewer::icp_process_clicked(bool checked) {
   if (scene_processed) {
     if (object_processed) {
-      if (pe->do_icp()) {
-        refresh_icp_viewer(true);
-        object_processed = false;
-      }
+      if (icp_initialized) {
+        if (pe->do_icp()) {
+          refresh_icp_viewer(true);
+          object_processed = false;
+        }
+      } else cout << "WARN: Initialize ICP first!" << endl;
     } else cout << "WARN: process object first!" << endl;
   } else cout << "WARN: process scene first!" << endl;
 }
 
 void PCLViewer::icp_save_clicked(bool checked) {
   string scene_name = scene_filename.substr(0, scene_filename.find("."));
-  string pose_filename = root_dir + string("/poses/") + scene_name +
+  string pose_filename = root_dir + string("/poses/tt_frame_") + scene_name +
       string(".txt");
   string scale_filename = root_dir + string("/scale.txt");
   if (pe->write_pose_file(pose_filename, scale_filename))
