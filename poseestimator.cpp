@@ -234,13 +234,20 @@ void PoseEstimator::init_icp(std::string filename) {
   object_azim(1, 1) = c;
 
   // save rotation of the turntable base
-  Eigen::Quaternionf q(object_pose.block<3, 3>(0, 0));
   ofstream f(filename, std::ios_base::app);
   if (!f.is_open()) {
     cout << "Could not open " << filename << " for appending" << endl;
     return;
   }
-  f << " " << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << endl;
+  f << " " << object_pose(0, 0);
+  f << " " << object_pose(0, 1);
+  f << " " << object_pose(0, 2);
+  f << " " << object_pose(1, 0);
+  f << " " << object_pose(1, 1);
+  f << " " << object_pose(1, 2);
+  f << " " << object_pose(2, 0);
+  f << " " << object_pose(2, 1);
+  f << " " << object_pose(2, 2);
   f.close();
   cout << "Turntable base rotation appended to " << filename << endl;
 }
@@ -280,15 +287,28 @@ bool PoseEstimator::do_icp() {
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
                                     std::string scale_filename) {
-  Eigen::Quaternionf q(object_pose.block<3, 3>(0, 0));
+  tformT T = object_pose * object_azim;
+  Eigen::Quaternionf q(T.block<3, 3>(0, 0));
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
     cout << "Could not open " << pose_filename << " for appending" << endl;
     return false;
   }
-  f << object_pose(0, 3) << " " << object_pose(1, 3) << " " << object_pose(2, 3)
-    << " " << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << endl;
+  f << T(0, 3) << " ";
+  f << T(1, 3) << " ";
+  f << T(2, 3) << " ";
+  f << T(0, 0) << " ";
+  f << T(0, 1) << " ";
+  f << T(0, 2) << " ";
+  f << T(1, 0) << " ";
+  f << T(1, 1) << " ";
+  f << T(1, 2) << " ";
+  f << T(2, 0) << " ";
+  f << T(2, 1) << " ";
+  f << T(2, 2) << endl;
+  // f << T(0, 3) << " " << T(1, 3) << " " << T(2, 3) << " " << q.w() << " "
+  //   << q.x() << " " << q.y() << " " << q.z() << endl;
   f.close();
 
   f.open(scale_filename);
