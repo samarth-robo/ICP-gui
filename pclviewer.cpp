@@ -20,7 +20,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   scene_cloud(new PointCloudT()), object_cloud(new PointCloudT()),
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
   icp_vis(new Vis("ICP")),
-  pe(new PoseEstimator()),
+  pe(new PoseEstimator()), plane_estimated(false),
   scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
   ui->setupUi(this);
@@ -46,6 +46,55 @@ PCLViewer::PCLViewer(QWidget *parent) :
   viewer->setupInteractor(widget->GetInteractor(), widget->GetRenderWindow());
   widget->update();
   init_viewers();
+
+  // make signal-slot connections
+  connect(ui->scene_leaf_size_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::scene_leaf_size_changed);
+  connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_leaf_size_changed);
+  connect(ui->scene_minheight_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::scene_min_height_changed);
+  connect(ui->object_x_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_x_changed);
+  connect(ui->object_y_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_y_changed);
+  connect(ui->object_z_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_z_changed);
+  connect(ui->object_init_azimuth_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_azim_changed);
+  connect(ui->scene_boxsize_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::scene_boxsize_changed);
+  connect(ui->icp_corr_dist_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::icp_corr_dist_changed);
+  connect(ui->icp_outlier_dist_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::icp_outlier_dist_changed);
+  connect(ui->icp_recip_corr_checkbox, &QCheckBox::stateChanged, this,
+          &PCLViewer::icp_recip_corr_clicked);
+  connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
+          &PCLViewer::icp_estimate_scale_clicked);
+  connect(ui->object_scale_x_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_x_clicked);
+  connect(ui->object_scale_y_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_y_clicked);
+  connect(ui->object_scale_z_radiobutton, &QRadioButton::clicked, this,
+          &PCLViewer::object_scale_z_clicked);
+  connect(ui->scene_process_button, &QAbstractButton::clicked, this,
+          &PCLViewer::scene_process_clicked);
+  connect(ui->scene_estimate_plane_button, &QAbstractButton::clicked, this,
+          &PCLViewer::scene_estimate_plane_clicked);
+  connect(ui->object_process_button, &QAbstractButton::clicked, this,
+          &PCLViewer::object_process_clicked);
+  connect(ui->icp_init_button, &QAbstractButton::clicked, this,
+          &PCLViewer::icp_init_clicked);
+  connect(ui->icp_process_button, &QAbstractButton::clicked, this,
+          &PCLViewer::icp_process_clicked);
+  connect(ui->icp_save_button, &QAbstractButton::clicked, this,
+          &PCLViewer::icp_save_clicked);
+  connect(ui->dir_select_button, &QAbstractButton::clicked, this,
+          &PCLViewer::dir_select_clicked);
+  connect(ui->scene_select_combo_box,
+          static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
+          this, &PCLViewer::scene_select_combo_box_activated);
 
   // fill out various line edits
   QString s;
@@ -82,54 +131,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
       ui->object_scale_z_radiobutton->setChecked(true);
   }
 
-  // make signal-slot connections
-  connect(ui->scene_leaf_size_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::scene_leaf_size_changed);
-  connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_leaf_size_changed);
-  connect(ui->scene_minheight_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::scene_min_height_changed);
-  connect(ui->object_x_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_init_x_changed);
-  connect(ui->object_y_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_init_y_changed);
-  connect(ui->object_z_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_init_z_changed);
-  connect(ui->object_init_azimuth_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_init_azim_changed);
-  connect(ui->scene_boxsize_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::scene_boxsize_changed);
-  connect(ui->icp_corr_dist_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::icp_corr_dist_changed);
-  connect(ui->icp_outlier_dist_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::icp_outlier_dist_changed);
-  connect(ui->icp_recip_corr_checkbox, &QCheckBox::stateChanged, this,
-          &PCLViewer::icp_recip_corr_clicked);
-  connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
-          &PCLViewer::icp_estimate_scale_clicked);
-  connect(ui->object_scale_x_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_x_clicked);
-  connect(ui->object_scale_y_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_y_clicked);
-  connect(ui->object_scale_z_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_z_clicked);
-  connect(ui->scene_process_button, &QAbstractButton::clicked, this,
-          &PCLViewer::scene_process_clicked);
-  connect(ui->scene_draw_box_button, &QAbstractButton::clicked, this,
-          &PCLViewer::scene_draw_box_clicked);
-  connect(ui->object_process_button, &QAbstractButton::clicked, this,
-          &PCLViewer::object_process_clicked);
-  connect(ui->icp_init_button, &QAbstractButton::clicked, this,
-          &PCLViewer::icp_init_clicked);
-  connect(ui->icp_process_button, &QAbstractButton::clicked, this,
-          &PCLViewer::icp_process_clicked);
-  connect(ui->icp_save_button, &QAbstractButton::clicked, this,
-          &PCLViewer::icp_save_clicked);
-  connect(ui->dir_select_button, &QAbstractButton::clicked, this,
-          &PCLViewer::dir_select_clicked);
-  connect(ui->scene_select_combo_box,
-          static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
-          this, &PCLViewer::scene_select_combo_box_activated);
+
 }
 
 PCLViewer::~PCLViewer() {
@@ -143,6 +145,8 @@ void PCLViewer::init_viewers() {
     PCL_ERROR("Could not load file %s\n", cloud_filename);
     return;
   } else {
+    scene_vis->removeAllPointClouds();
+    scene_vis->removeAllShapes();
     scene_vis->addPointCloud(scene_cloud, "scene");
     pe->set_scene(scene_cloud);
     cout << "Loaded scene of size " << scene_cloud->width << " x "
@@ -192,7 +196,7 @@ void PCLViewer::scene_min_height_changed(const QString &t) {
     scene_processed = false;
     cout << "Set scene min. height to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong height above table " << t.toStdString() << endl;
   }
 }
 
@@ -204,7 +208,7 @@ void PCLViewer::object_init_x_changed(const QString &t) {
     scene_processed = false;
     cout << "Set object init X to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong object init X " << t.toStdString() << endl;
   }
 }
 
@@ -216,7 +220,7 @@ void PCLViewer::object_init_y_changed(const QString &t) {
     scene_processed = false;
     cout << "Set object init Y to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong object init Y " << t.toStdString() << endl;
   }
 }
 
@@ -228,7 +232,7 @@ void PCLViewer::object_init_z_changed(const QString &t) {
     scene_processed = false;
     cout << "Set object init Z to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong object init Z " << t.toStdString() << endl;
   }
 }
 
@@ -239,7 +243,7 @@ void PCLViewer::object_init_azim_changed(const QString &t) {
     pe->set_object_init_azim(s);
     cout << "Set object init azimuth to " << s << " degrees" << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong object init azimuth angle " << t.toStdString() << endl;
   }
 }
 
@@ -253,7 +257,7 @@ void PCLViewer::scene_boxsize_changed(const QString &t) {
     scene_processed = false;
     cout << "Set scene box size to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong scene box size " << t.toStdString() << endl;
   }
 }
 
@@ -264,7 +268,7 @@ void PCLViewer::icp_outlier_dist_changed(const QString &t) {
     pe->set_icp_outlier_dist(s);
     cout << "Set ICP RANSAC outlier threshold to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong ICP outlier distance " << t.toStdString() << endl;
   }
 }
 
@@ -275,7 +279,8 @@ void PCLViewer::icp_corr_dist_changed(const QString &t) {
     pe->set_icp_corr_dist(s);
     cout << "Set ICP max. correspondence distance to " << s << endl;
   } else {
-    cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+    cout << "ERROR: wrong ICP correspondence distance " << t.toStdString()
+         << endl;
   }
 }
 
@@ -309,11 +314,31 @@ void PCLViewer::icp_estimate_scale_clicked(int state) {
   }
 }
 
+void PCLViewer::scene_estimate_plane_clicked(bool checked) {
+  if (!pe->estimate_plane_params()) {
+    cout << "WARN: Could not estimate plane" << endl;
+    return;
+  }
+  plane_estimated = true;
+  auto min_pt = pe->get_scene_box_min_pt();
+  auto max_pt = pe->get_scene_box_max_pt();
+  scene_vis->removeAllShapes();
+  scene_vis->addCube(min_pt, max_pt);
+  scene_vis->addPlane(pe->get_scene_plane_coeffs(), pe->get_object_init_x(),
+                      pe->get_object_init_y(), pe->get_object_init_z());
+  cout << "Plane estimated, plane and box drawn" << endl;
+}
+
 void PCLViewer::scene_process_clicked(bool checked) {
+  if (!plane_estimated) {
+    cout << "WARN: Estimate plane first!" << endl;
+    return;
+  }
   pe->process_scene();
   scene_processed = true;
   cout << "scene processed" << endl;
   scene_vis->removeAllPointClouds();
+  scene_vis->removeAllShapes();
   scene_vis->addPointCloud(pe->get_processed_scene(), "scene");
 }
 
@@ -332,14 +357,6 @@ void PCLViewer::object_scale_z_clicked(bool checked) {
     cout << "Scaling object using Z axis" << endl;
 }
 
-void PCLViewer::scene_draw_box_clicked(bool checked) {
-    auto min_pt = pe->get_scene_box_min_pt();
-    auto max_pt = pe->get_scene_box_max_pt();
-    scene_vis->removeAllShapes();
-    scene_vis->addCube(min_pt, max_pt);
-    cout << "Box drawn" << endl;
-}
-
 void PCLViewer::object_process_clicked(bool checked) {
   if (scene_processed) {
     pe->process_object();
@@ -353,8 +370,8 @@ void PCLViewer::object_process_clicked(bool checked) {
 void PCLViewer::refresh_icp_viewer(bool whole_scene) {
   icp_vis->removeAllPointClouds();
   if (whole_scene)
-    icp_vis->addPointCloud<PointT>(pe->get_scene(), {0, 1, 0},
-                                   "scene");
+    icp_vis->addPointCloud<PointT>(pe->get_cropped_subsampled_scene(),
+    {0, 1, 0}, "scene");
   else
     icp_vis->addPointCloud<PointT>(pe->get_processed_scene(), {0, 1, 0},
                                    "scene");

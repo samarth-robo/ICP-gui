@@ -225,3 +225,15 @@ void Vis::show(bool block) {
   viewer->resetStoppedFlag();
   viewer->close();
 }
+
+bool Vis::addPlane(const ModelCoefficientsConstPtr &coeffs) {
+  string id = get_next_id("plane");
+  bool done = viewer->addPlane(*coeffs, id);
+  return done;
+}
+bool Vis::addPlane(const ModelCoefficientsConstPtr &coeffs, double x, double y,
+                   double z) {
+  string id = get_next_id("plane");
+  bool done = viewer->addPlane(*coeffs, x, y, z, id);
+  return done;
+}

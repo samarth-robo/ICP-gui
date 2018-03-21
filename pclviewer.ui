@@ -348,9 +348,9 @@
       </layout>
      </item>
      <item>
-      <widget class="QPushButton" name="scene_draw_box_button">
+      <widget class="QPushButton" name="scene_estimate_plane_button">
        <property name="text">
-        <string>Draw Box</string>
+        <string>Estimate Plane</string>
        </property>
       </widget>
      </item>

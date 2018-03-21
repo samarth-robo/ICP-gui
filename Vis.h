@@ -59,6 +59,10 @@ class Vis {
                           typename pcl::PointCloud<PointT>::ConstPtr target,
                           std::vector<int> const &corrs, int skip = 20);
 
+  bool addPlane(const pcl::ModelCoefficientsConstPtr &coeffs);
+  bool addPlane(const pcl::ModelCoefficientsConstPtr &coeffs, double x, double y,
+                double z);
+
   pcl::visualization::PCLVisualizer::Ptr get_viewer() {return viewer;}
   bool removeAllPointClouds() {return viewer->removeAllPointClouds();}
   bool removePointCloud(std::string id) {return viewer->removePointCloud(id);}

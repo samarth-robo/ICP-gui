@@ -51,6 +51,10 @@ public:
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
   PointCloudT::ConstPtr get_scene() {return scene;}
+  PointCloudT::ConstPtr get_cropped_subsampled_scene()
+  {return scene_cropped_subsampled;}
+  pcl::ModelCoefficientsConstPtr get_scene_plane_coeffs()
+  {return scene_plane_coeffs;}
 
   // other functions
   void process_scene();
@@ -58,8 +62,10 @@ public:
   void init_icp(std::string tt_base_filename);
   bool do_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
+  bool estimate_plane_params();
 
 private:
+  void crop_subsample_scene();
   // pose util functions
   typedef Eigen::Matrix4f tformT;
   tformT get_tabletop_rot(Eigen::Vector3f obj_normal = Eigen::Vector3f(0, 0, 1));
@@ -72,11 +78,12 @@ private:
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
   bool icp_use_reciprocal_corr, icp_estimate_scale;
-  PointCloudT::Ptr scene_processed, object_processed;
   PointCloudT::ConstPtr scene, object;
+  PointCloudT::Ptr scene_cropped_subsampled;
+  PointCloudT::Ptr scene_processed, object_processed;
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
-  PointCloudT::Ptr scene_hull_points;
+  PointCloudT::Ptr scene_plane_hull_points;
   tformT object_pose, object_azim, object_scale;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling

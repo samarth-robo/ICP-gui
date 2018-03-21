@@ -20,8 +20,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
-  icp_n_iters(50), icp_outlier_rejection_thresh(0.002),
-  icp_max_corr_distance(0.01), icp_use_reciprocal_corr(false),
+  icp_n_iters(200), icp_outlier_rejection_thresh(0.002),
+  icp_max_corr_distance(0.01), icp_use_reciprocal_corr(true),
   icp_estimate_scale(false), scale_axis('x'),
   object_azim(PoseEstimator::tformT::Identity()),
   object_scale(PoseEstimator::tformT::Identity()) {
@@ -35,10 +35,11 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   }
 
   // init the various shared pointers
-  scene_processed    = boost::make_shared<PointCloudT>();
-  object_processed   = boost::make_shared<PointCloudT>();
-  scene_hull_points  = boost::make_shared<PointCloudT>();
-  scene_plane_coeffs = boost::make_shared<ModelCoefficients>();
+  scene_cropped_subsampled = boost::make_shared<PointCloudT>();
+  scene_processed          = boost::make_shared<PointCloudT>();
+  object_processed         = boost::make_shared<PointCloudT>();
+  scene_plane_hull_points  = boost::make_shared<PointCloudT>();
+  scene_plane_coeffs       = boost::make_shared<ModelCoefficients>();
 }
 
 void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
@@ -69,7 +70,7 @@ PointXYZ PoseEstimator::get_scene_box_max_pt() {
     return p;
 }
 
-void PoseEstimator::process_scene() {
+void PoseEstimator::crop_subsample_scene() {
   // subsample using voxel grid
   scene_vox.setLeafSize(scene_leaf_size, scene_leaf_size, scene_leaf_size);
   PointCloudT::Ptr subs = boost::make_shared<PointCloudT>();
@@ -82,10 +83,12 @@ void PoseEstimator::process_scene() {
   box.setMax(Eigen::Vector4f(+scene_boxsize_x/2, 0.05, +scene_boxsize_z/2, 0));
   box.setTranslation(Eigen::Vector3f(object_init_x, object_init_y,
                                      object_init_z));
-  PointCloudT::Ptr cbox = boost::make_shared<PointCloudT>();
-  box.filter(*cbox);
-  // box.filter(*scene_processed);
-  // return;
+  box.filter(*scene_cropped_subsampled);
+}
+
+bool PoseEstimator::estimate_plane_params() {
+  // crop and subsample scene
+  crop_subsample_scene();
 
   // estimate the plane
   console::print_info("Estimating plane...");
@@ -95,40 +98,44 @@ void PoseEstimator::process_scene() {
   plane_seg.setModelType(SACMODEL_PLANE);
   plane_seg.setMethodType(SAC_RANSAC);
   plane_seg.setDistanceThreshold(0.001);
-  // plane_seg.setInputCloud(scene);
-  plane_seg.setInputCloud(cbox);
+  plane_seg.setInputCloud(scene_cropped_subsampled);
   plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
   if (plane_inliers->indices.size() == 0) {
     console::print_error("No plane found in the scene.");
-    return;
+    return false;
   } else console::print_info("done.\n");
 
   // plane pointlcoud and hull
   PointCloudT::Ptr plane_cloud = boost::make_shared<PointCloudT>();
   ExtractIndices<PointT> extract;
-  // extract.setInputCloud(scene);
-  extract.setInputCloud(cbox);
+  extract.setInputCloud(scene_cropped_subsampled);
   extract.setIndices(plane_inliers);
   extract.setNegative(false);
   extract.filter(*plane_cloud);
   ConvexHull<PointT> hull;
   hull.setInputCloud(plane_cloud);
-  hull.reconstruct(*scene_hull_points);
+  hull.reconstruct(*scene_plane_hull_points);
   if (hull.getDimension() != 2) {
     console::print_error("Estimated plane pointcloud is not 2D.\n");
-    return;
-  }
+    return false;
+  } else return true;
+}
+
+void PoseEstimator::process_scene() {
+  // assume cropping, subsampling and plane estimation is done
 
   // segment object sticking out of the plane
   ExtractPolygonalPrismData<PointT> prism;
   PointIndicesPtr idx = boost::make_shared<PointIndices>();
   PointCloudT::Ptr obj = boost::make_shared<PointCloudT>();
-  prism.setInputCloud(cbox);
-  prism.setInputPlanarHull(scene_hull_points);
+  prism.setInputCloud(scene_cropped_subsampled);
+  prism.setInputPlanarHull(scene_plane_hull_points);
   prism.setHeightLimits(scene_min_height, scene_boxsize_z);
   prism.segment(*idx);
-  extract.setInputCloud(cbox);
+  ExtractIndices<PointT> extract;
+  extract.setInputCloud(scene_cropped_subsampled);
   extract.setIndices(idx);
+  extract.setNegative(false);
   extract.filter(*obj);
 
   // remove noise
@@ -165,14 +172,15 @@ void PoseEstimator::process_scene() {
 void PoseEstimator::process_object() {
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
-  object_vox.filter(*object_processed);
+  PointCloudT::Ptr subs = boost::make_shared<PointCloudT>();
+  object_vox.filter(*subs);
 
   // orient by tabletop
   object_pose = get_tabletop_rot();
 
   // scale by size of object in scene
   PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
+  getMinMax3D<PointT>(*subs, min_pt, max_pt);
   float scale = axis_size;
   switch (scale_axis) {
   case 'x':
@@ -188,6 +196,22 @@ void PoseEstimator::process_object() {
   object_scale = tformT::Identity();
   object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   cout << "Scaled object by " << scale << "x" << endl;
+
+  // crop bottom of object
+  getMinMax3D<PointT>(*subs, min_pt, max_pt);
+  cout << "Minimum Z point in object model = " << min_pt.z << endl;
+  if (fabs(min_pt.z) > 1e-4) {
+    cout << "WARN: That value is too high. Please re-align axes in the model"
+         << endl;
+  }
+  float h = scene_min_height / scale;
+  min_pt.z += h;
+
+  CropBox<PointT> box;
+  box.setInputCloud(subs);
+  box.setMin(Eigen::Vector4f(min_pt.x, min_pt.y, min_pt.z, 0));
+  box.setMax(Eigen::Vector4f(max_pt.x, max_pt.y, max_pt.z, 0));
+  box.filter(*object_processed);
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
