@@ -6,6 +6,9 @@
 
 class PoseEstimator
 {
+private:
+  typedef Eigen::Matrix4f tformT;
+
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   PoseEstimator(PointCloudT::ConstPtr const &scene = nullptr,
@@ -55,11 +58,12 @@ public:
   {return scene_cropped_subsampled;}
   pcl::ModelCoefficientsConstPtr get_scene_plane_coeffs()
   {return scene_plane_coeffs;}
+  tformT get_object_pose() {return object_pose;}
 
   // other functions
   void process_scene();
   void process_object();
-  void init_icp(std::string tt_base_filename);
+  void init_icp();
   bool do_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
   bool estimate_plane_params();
@@ -67,7 +71,6 @@ public:
 private:
   void crop_subsample_scene();
   // pose util functions
-  typedef Eigen::Matrix4f tformT;
   tformT get_tabletop_rot(Eigen::Vector3f obj_normal = Eigen::Vector3f(0, 0, 1));
   tformT invert_pose(tformT const &in);
 

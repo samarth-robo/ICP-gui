@@ -158,7 +158,7 @@ void PCLViewer::init_viewers() {
     PCL_ERROR("Could not load file %s\n", cloud_filename);
     return;
   } else {
-    object_vis->addPointCloud(object_cloud, "object");
+    object_vis->addPointCloud<PointT>(object_cloud, {1, 0, 0}, "object");
     pe->set_object(object_cloud);
     cout << "Loaded object of size " << object_cloud->width << " x "
          << object_cloud->height << endl;
@@ -326,6 +326,9 @@ void PCLViewer::scene_estimate_plane_clicked(bool checked) {
   scene_vis->addCube(min_pt, max_pt);
   scene_vis->addPlane(pe->get_scene_plane_coeffs(), pe->get_object_init_x(),
                       pe->get_object_init_y(), pe->get_object_init_z());
+  PointXYZ p(pe->get_object_init_x(), pe->get_object_init_y(),
+             pe->get_object_init_z());
+  scene_vis->addSphere(p, 0.005, {1, 0, 1});
   cout << "Plane estimated, plane and box drawn" << endl;
 }
 
@@ -358,13 +361,46 @@ void PCLViewer::object_scale_z_clicked(bool checked) {
 }
 
 void PCLViewer::object_process_clicked(bool checked) {
-  if (scene_processed) {
-    pe->process_object();
-    object_processed = true;
-    cout << "object processed" << endl;
-    object_vis->removeAllPointClouds();
-    object_vis->addPointCloud(pe->get_processed_object(), "object");
-  } else cout << "WARN: process scene first!" << endl;
+  if (!scene_processed) {
+    cout << "WARN: process scene first!" << endl;
+    return;
+  }
+  pe->process_object();
+  object_processed = true;
+  cout << "object processed" << endl;
+  object_vis->removeAllPointClouds();
+  object_vis->addPointCloud<PointT>(pe->get_processed_object(), {1, 0, 0},
+                                    "object");
+
+  // save rotation of the turntable base
+  string filename = root_dir + string("/poses/tt_base.txt");
+  ifstream ifile(filename);
+  if (!ifile.is_open()) {
+    cout << "Could not open " << filename << " for reading" << endl;
+    return;
+  }
+  float x, y, z;
+  ifile >> x >> y >> z;
+  ifile.close();
+
+  auto object_pose = pe->get_object_pose();
+  ofstream ofile(filename);
+  if (!ofile.is_open()) {
+    cout << "Could not open " << filename << " for writing" << endl;
+    return;
+  }
+  ofile << x << " " << y << " " << z;
+  ofile << " " << object_pose(0, 0);
+  ofile << " " << object_pose(0, 1);
+  ofile << " " << object_pose(0, 2);
+  ofile << " " << object_pose(1, 0);
+  ofile << " " << object_pose(1, 1);
+  ofile << " " << object_pose(1, 2);
+  ofile << " " << object_pose(2, 0);
+  ofile << " " << object_pose(2, 1);
+  ofile << " " << object_pose(2, 2);
+  ofile.close();
+  cout << "Turntable base rotation written to " << filename << endl;
 }
 
 void PCLViewer::refresh_icp_viewer(bool whole_scene) {
@@ -382,8 +418,7 @@ void PCLViewer::refresh_icp_viewer(bool whole_scene) {
 void PCLViewer::icp_init_clicked(bool checked) {
   if (scene_processed) {
     if (object_processed) {
-      string tt_base_filename = root_dir + string("/poses/tt_base.txt");
-      pe->init_icp(tt_base_filename);
+      pe->init_icp();
       icp_initialized = true;
       refresh_icp_viewer();
     } else cout << "WARN: process object first!" << endl;
@@ -443,6 +478,22 @@ void PCLViewer::dir_select_clicked(bool checked) {
     cout << "WARN: 'pointclouds' directory not found in " << root_dir << endl;
     return;
   }
+
+  // read init XYZ info from txt file
+  ifstream f(root_dir + string("/poses/tt_base.txt"));
+  float x, y, z;
+  f >> x >> y >> z;
+  pe->set_object_init_x(x);
+  pe->set_object_init_y(y);
+  pe->set_object_init_z(z);
+  f.close();
+  QString s;
+  s.setNum(x);
+  ui->object_x_line_edit->setText(s);
+  s.setNum(y);
+  ui->object_y_line_edit->setText(s);
+  s.setNum(z);
+  ui->object_z_line_edit->setText(s);
 }
 
 void PCLViewer::scene_select_combo_box_activated(const QString &text) {

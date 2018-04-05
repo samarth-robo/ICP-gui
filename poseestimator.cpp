@@ -141,7 +141,7 @@ void PoseEstimator::process_scene() {
   // remove noise
   StatisticalOutlierRemoval<PointT> sor;
   sor.setInputCloud(obj);
-  sor.setMeanK(50);
+  sor.setMeanK(200);
   sor.setStddevMulThresh(1.0);
   PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
   sor.filter(*obj_filt);
@@ -247,7 +247,7 @@ PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
 }
 
 // initializes the data for running ICP
-void PoseEstimator::init_icp(std::string filename) {
+void PoseEstimator::init_icp() {
   // object initial azimuth angle
   float s = sin(object_init_azim * float(M_PI)/180),
       c = cos(object_init_azim * float(M_PI)/180);
@@ -256,24 +256,6 @@ void PoseEstimator::init_icp(std::string filename) {
   object_azim(0, 1) = -s;
   object_azim(1, 0) = s;
   object_azim(1, 1) = c;
-
-  // save rotation of the turntable base
-  ofstream f(filename, std::ios_base::app);
-  if (!f.is_open()) {
-    cout << "Could not open " << filename << " for appending" << endl;
-    return;
-  }
-  f << " " << object_pose(0, 0);
-  f << " " << object_pose(0, 1);
-  f << " " << object_pose(0, 2);
-  f << " " << object_pose(1, 0);
-  f << " " << object_pose(1, 1);
-  f << " " << object_pose(1, 2);
-  f << " " << object_pose(2, 0);
-  f << " " << object_pose(2, 1);
-  f << " " << object_pose(2, 2);
-  f.close();
-  cout << "Turntable base rotation appended to " << filename << endl;
 }
 
 // do ICP
