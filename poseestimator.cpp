@@ -20,11 +20,12 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
-  icp_n_iters(200), icp_outlier_rejection_thresh(0.002),
+  icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.01), icp_use_reciprocal_corr(true),
-  icp_estimate_scale(false), scale_axis('x'),
+  icp_estimate_scale(false), scale_axis('y'),
   object_azim(PoseEstimator::tformT::Identity()),
-  object_scale(PoseEstimator::tformT::Identity()) {
+  object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
+  object_init_dy(0), object_init_dz(0) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -97,7 +98,7 @@ bool PoseEstimator::estimate_plane_params() {
   plane_seg.setOptimizeCoefficients(true);
   plane_seg.setModelType(SACMODEL_PLANE);
   plane_seg.setMethodType(SAC_RANSAC);
-  plane_seg.setDistanceThreshold(0.001);
+  plane_seg.setDistanceThreshold(0.003);
   plane_seg.setInputCloud(scene_cropped_subsampled);
   plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
   if (plane_inliers->indices.size() == 0) {
@@ -141,7 +142,7 @@ void PoseEstimator::process_scene() {
   // remove noise
   StatisticalOutlierRemoval<PointT> sor;
   sor.setInputCloud(obj);
-  sor.setMeanK(200);
+  sor.setMeanK(50);
   sor.setStddevMulThresh(1.0);
   PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
   sor.filter(*obj_filt);
@@ -153,18 +154,25 @@ void PoseEstimator::process_scene() {
   T(2, 3) = object_init_z;
   transformPointCloud(*obj_filt, *scene_processed, invert_pose(T));
 
-  // measure its size along X axis
+  // measure its size along specified axis
+  // first get the components of the scene_min_height vector in all dirs
+  float a = scene_plane_coeffs->values[0], b = scene_plane_coeffs->values[1],
+      c = scene_plane_coeffs->values[2];
+  float r = sqrtf(a*a + b*b + c*c);
+  // Eigen::Vector3f plane_normal = Eigen::Vector3f(0,0,0)/r*scene_min_height;
+  Eigen::Vector3f plane_normal = Eigen::Vector3f(a,b,c)/r*scene_min_height;
+
   PointT min_pt, max_pt;
   getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
   switch (scale_axis) {
   case 'x':
-      axis_size = fabs(max_pt.x - min_pt.x);
+      axis_size = fabs(max_pt.x - min_pt.x) + fabs(plane_normal[0]);
       break;
   case 'y':
-      axis_size = fabs(max_pt.y - min_pt.y);
+      axis_size = fabs(max_pt.y - min_pt.y) + fabs(plane_normal[1]);
       break;
   case 'z':
-      axis_size = fabs(max_pt.z - min_pt.z);
+      axis_size = fabs(max_pt.z - min_pt.z) + fabs(plane_normal[2]);
       break;
   }
 }
@@ -179,8 +187,10 @@ void PoseEstimator::process_object() {
   object_pose = get_tabletop_rot();
 
   // scale by size of object in scene
+  PointCloudT::Ptr subs_t = boost::make_shared<PointCloudT>();
+  transformPointCloud(*subs, *subs_t, object_pose);
   PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*subs, min_pt, max_pt);
+  getMinMax3D<PointT>(*subs_t, min_pt, max_pt);
   float scale = axis_size;
   switch (scale_axis) {
   case 'x':
@@ -256,6 +266,9 @@ void PoseEstimator::init_icp() {
   object_azim(0, 1) = -s;
   object_azim(1, 0) = s;
   object_azim(1, 1) = c;
+  object_pose(0, 3) = object_init_dx;
+  object_pose(1, 3) = object_init_dy;
+  object_pose(2, 3) = object_init_dz;
 }
 
 // do ICP

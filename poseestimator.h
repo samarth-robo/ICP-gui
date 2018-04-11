@@ -24,6 +24,9 @@ public:
   void set_object_init_x(float s)    {object_init_x = s;}
   void set_object_init_y(float s)    {object_init_y = s;}
   void set_object_init_z(float s)    {object_init_z = s;}
+  void set_object_init_dx(float s)   {object_init_dx = s;}
+  void set_object_init_dy(float s)   {object_init_dy = s;}
+  void set_object_init_dz(float s)   {object_init_dz = s;}
   void set_object_init_azim(float s) {object_init_azim = s;}
   void set_icp_outlier_dist(float s) {icp_outlier_rejection_thresh = s;}
   void set_icp_corr_dist(float s)    {icp_max_corr_distance = s;}
@@ -45,6 +48,9 @@ public:
   float get_object_init_x()      {return object_init_x;}
   float get_object_init_y()      {return object_init_y;}
   float get_object_init_z()      {return object_init_z;}
+  float get_object_init_dx()     {return object_init_dx;}
+  float get_object_init_dy()     {return object_init_dy;}
+  float get_object_init_dz()     {return object_init_dz;}
   float get_object_init_azim()   {return object_init_azim;}
   float get_icp_outlier_dist()   {return icp_outlier_rejection_thresh;}
   float get_icp_corr_dist()      {return icp_max_corr_distance;}
@@ -77,7 +83,8 @@ private:
   float scene_leaf_size, object_leaf_size;
   float scene_min_height;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;
-  float object_init_x, object_init_y, object_init_z, object_init_azim;
+  float object_init_x, object_init_y, object_init_z, object_init_azim,
+  object_init_dx, object_init_dy, object_init_dz;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
   bool icp_use_reciprocal_corr, icp_estimate_scale;

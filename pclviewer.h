@@ -29,6 +29,9 @@ public slots:
     void object_init_x_changed(const QString &t);
     void object_init_y_changed(const QString &t);
     void object_init_z_changed(const QString &t);
+    void object_init_dx_changed(const QString &t);
+    void object_init_dy_changed(const QString &t);
+    void object_init_dz_changed(const QString &t);
     void object_init_azim_changed(const QString &t);
     void scene_boxsize_changed(const QString &t);
     void icp_corr_dist_changed(const QString &t);

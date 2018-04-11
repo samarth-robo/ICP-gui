@@ -60,6 +60,12 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::object_init_y_changed);
   connect(ui->object_z_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_init_z_changed);
+  connect(ui->object_dx_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_dx_changed);
+  connect(ui->object_dy_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_dy_changed);
+  connect(ui->object_dz_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_init_dz_changed);
   connect(ui->object_init_azimuth_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_init_azim_changed);
   connect(ui->scene_boxsize_line_edit, &QLineEdit::textEdited, this,
@@ -112,6 +118,12 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->object_y_line_edit->setText(s);
   s.setNum(pe->get_object_init_z());
   ui->object_z_line_edit->setText(s);
+  s.setNum(pe->get_object_init_dx());
+  ui->object_dx_line_edit->setText(s);
+  s.setNum(pe->get_object_init_dy());
+  ui->object_dy_line_edit->setText(s);
+  s.setNum(pe->get_object_init_dz());
+  ui->object_dz_line_edit->setText(s);
   s.setNum(pe->get_object_init_azim());
   ui->object_init_azimuth_line_edit->setText(s);
   s.setNum(pe->get_icp_outlier_dist());
@@ -233,6 +245,39 @@ void PCLViewer::object_init_z_changed(const QString &t) {
     cout << "Set object init Z to " << s << endl;
   } else {
     cout << "ERROR: wrong object init Z " << t.toStdString() << endl;
+  }
+}
+
+void PCLViewer::object_init_dx_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_object_init_dx(s);
+    cout << "Set object init dX to " << s << endl;
+  } else {
+    cout << "ERROR: wrong object init dX " << t.toStdString() << endl;
+  }
+}
+
+void PCLViewer::object_init_dy_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_object_init_dy(s);
+    cout << "Set object init dY to " << s << endl;
+  } else {
+    cout << "ERROR: wrong object init dY " << t.toStdString() << endl;
+  }
+}
+
+void PCLViewer::object_init_dz_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_object_init_dz(s);
+    cout << "Set object init dZ to " << s << endl;
+  } else {
+    cout << "ERROR: wrong object init dZ " << t.toStdString() << endl;
   }
 }
 
