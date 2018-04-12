@@ -16,13 +16,13 @@ using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
-  scene_leaf_size(0.001f), object_leaf_size(0.001f), scene_min_height(0.005f),
+  scene_leaf_size(0.001f), object_leaf_size(0.001f), scene_min_height(0.004f),
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
-  icp_max_corr_distance(0.01), icp_use_reciprocal_corr(true),
-  icp_estimate_scale(false), scale_axis('y'),
+  icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
+  icp_estimate_scale(false), scale_axis('z'),
   object_azim(PoseEstimator::tformT::Identity()),
   object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
   object_init_dy(0), object_init_dz(0) {
@@ -51,6 +51,9 @@ void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
 void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object = p;
   object_vox.setInputCloud(object);
+  object_pose = tformT::Identity();
+  object_azim = tformT::Identity();
+  object_scale = tformT::Identity();
 }
 
 PointXYZ PoseEstimator::get_scene_box_min_pt() {
@@ -77,7 +80,6 @@ void PoseEstimator::crop_subsample_scene() {
   PointCloudT::Ptr subs = boost::make_shared<PointCloudT>();
   scene_vox.filter(*subs);
 
-  // crop box
   CropBox<PointT> box;
   box.setInputCloud(subs);
   box.setMin(Eigen::Vector4f(-scene_boxsize_x/2, -0.15, -scene_boxsize_z/2, 0));
@@ -125,72 +127,66 @@ bool PoseEstimator::estimate_plane_params() {
 void PoseEstimator::process_scene() {
   // assume cropping, subsampling and plane estimation is done
 
-  // segment object sticking out of the plane
-  ExtractPolygonalPrismData<PointT> prism;
-  PointIndicesPtr idx = boost::make_shared<PointIndices>();
-  PointCloudT::Ptr obj = boost::make_shared<PointCloudT>();
-  prism.setInputCloud(scene_cropped_subsampled);
-  prism.setInputPlanarHull(scene_plane_hull_points);
-  prism.setHeightLimits(scene_min_height, scene_boxsize_z);
-  prism.segment(*idx);
-  ExtractIndices<PointT> extract;
-  extract.setInputCloud(scene_cropped_subsampled);
-  extract.setIndices(idx);
-  extract.setNegative(false);
-  extract.filter(*obj);
-
-  // remove noise
-  StatisticalOutlierRemoval<PointT> sor;
-  sor.setInputCloud(obj);
-  sor.setMeanK(50);
-  sor.setStddevMulThresh(1.0);
-  PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
-  sor.filter(*obj_filt);
-
-  // transform by object init position
+  // align the scene and plane inliers to canonical axes (+Z up)
   tformT T = tformT::Identity();
   T(0, 3) = object_init_x;
   T(1, 3) = object_init_y;
   T(2, 3) = object_init_z;
-  transformPointCloud(*obj_filt, *scene_processed, invert_pose(T));
+  T = invert_pose(T * get_tabletop_rot());
+  PointCloudT::Ptr scene_aligned = boost::make_shared<PointCloudT>();
+  transformPointCloud(*scene_cropped_subsampled, *scene_aligned, T);
+  transformPointCloud(*scene_plane_hull_points, *scene_plane_hull_points, T);
 
-  // measure its size along specified axis
-  // first get the components of the scene_min_height vector in all dirs
-  float a = scene_plane_coeffs->values[0], b = scene_plane_coeffs->values[1],
-      c = scene_plane_coeffs->values[2];
-  float r = sqrtf(a*a + b*b + c*c);
-  // Eigen::Vector3f plane_normal = Eigen::Vector3f(0,0,0)/r*scene_min_height;
-  Eigen::Vector3f plane_normal = Eigen::Vector3f(a,b,c)/r*scene_min_height;
+  // segment object sticking out of the plane
+  ExtractPolygonalPrismData<PointT> prism;
+  prism.setViewPoint(0, 0, 1);
+  PointIndicesPtr idx = boost::make_shared<PointIndices>();
+  prism.setInputCloud(scene_aligned);
+  prism.setInputPlanarHull(scene_plane_hull_points);
+  ExtractIndices<PointT> extract;
+  extract.setInputCloud(scene_aligned);
+  extract.setNegative(false);
 
+  prism.setHeightLimits(scene_min_height, scene_boxsize_z);
+  prism.segment(*idx);
+  extract.setIndices(idx);
+  extract.filter(*scene_processed);
+
+  // remove noise
+  // StatisticalOutlierRemoval<PointT> sor;
+  // sor.setInputCloud(obj);
+  // sor.setMeanK(50);
+  // sor.setStddevMulThresh(1.0);
+  // PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
+  // sor.filter(*obj_filt);
+
+  // measure dimension of object - highly recommended along Z axis!
   PointT min_pt, max_pt;
   getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
   switch (scale_axis) {
   case 'x':
-      axis_size = fabs(max_pt.x - min_pt.x) + fabs(plane_normal[0]);
+      axis_size = fabs(max_pt.x - min_pt.x);
       break;
   case 'y':
-      axis_size = fabs(max_pt.y - min_pt.y) + fabs(plane_normal[1]);
+      axis_size = fabs(max_pt.y - min_pt.y);
       break;
   case 'z':
-      axis_size = fabs(max_pt.z - min_pt.z) + fabs(plane_normal[2]);
+      axis_size = fabs(max_pt.z - min_pt.z);
       break;
   }
+  console::print_info("Scene object dimension along %c axis is %4.3f\n",
+                      scale_axis, axis_size);
 }
 
 void PoseEstimator::process_object() {
+  // Assumes the object has it's Z axis pointing up!
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
-  PointCloudT::Ptr subs = boost::make_shared<PointCloudT>();
-  object_vox.filter(*subs);
-
-  // orient by tabletop
-  object_pose = get_tabletop_rot();
+  object_vox.filter(*object_processed);
 
   // scale by size of object in scene
-  PointCloudT::Ptr subs_t = boost::make_shared<PointCloudT>();
-  transformPointCloud(*subs, *subs_t, object_pose);
   PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*subs_t, min_pt, max_pt);
+  getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
   float scale = axis_size;
   switch (scale_axis) {
   case 'x':
@@ -206,22 +202,6 @@ void PoseEstimator::process_object() {
   object_scale = tformT::Identity();
   object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   cout << "Scaled object by " << scale << "x" << endl;
-
-  // crop bottom of object
-  getMinMax3D<PointT>(*subs, min_pt, max_pt);
-  cout << "Minimum Z point in object model = " << min_pt.z << endl;
-  if (fabs(min_pt.z) > 1e-4) {
-    cout << "WARN: That value is too high. Please re-align axes in the model"
-         << endl;
-  }
-  float h = scene_min_height / scale;
-  min_pt.z += h;
-
-  CropBox<PointT> box;
-  box.setInputCloud(subs);
-  box.setMin(Eigen::Vector4f(min_pt.x, min_pt.y, min_pt.z, 0));
-  box.setMax(Eigen::Vector4f(max_pt.x, max_pt.y, max_pt.z, 0));
-  box.filter(*object_processed);
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
@@ -266,6 +246,7 @@ void PoseEstimator::init_icp() {
   object_azim(0, 1) = -s;
   object_azim(1, 0) = s;
   object_azim(1, 1) = c;
+  object_pose = tformT::Identity();
   object_pose(0, 3) = object_init_dx;
   object_pose(1, 3) = object_init_dy;
   object_pose(2, 3) = object_init_dz;
@@ -291,12 +272,17 @@ bool PoseEstimator::do_icp() {
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);
   if (icp.hasConverged()) {
+    cout << "ICP converged" << endl;
+
+    // get final object pose
     tformT T = icp.getFinalTransformation();
     object_pose = T * object_pose;
-    object_pose(0, 3) += object_init_x;
-    object_pose(1, 3) += object_init_y;
-    object_pose(2, 3) += object_init_z;
-    cout << "ICP converged" << endl;
+    T = tformT::Identity();
+    T(0, 3) = object_init_x;
+    T(1, 3) = object_init_y;
+    T(2, 3) = object_init_z;
+    T *= get_tabletop_rot();
+    object_pose = T * object_pose;
     return true;
   } else {
     console::print_error("ICP did not converge.");
@@ -305,7 +291,8 @@ bool PoseEstimator::do_icp() {
 }
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
-                                    std::string scale_filename) {
+                                    std::string scale_filename,
+                                    std::string tt_base_filename) {
   tformT T = object_pose * object_azim;
   Eigen::Quaternionf q(T.block<3, 3>(0, 0));
 
@@ -337,6 +324,33 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   }
   f << object_scale(0, 0) << endl;
   f.close();
+
+  ifstream ifile(tt_base_filename);
+  if (!ifile.is_open()) {
+    cout << "Could not open " << tt_base_filename << " for reading" << endl;
+    return false;
+  }
+  float x, y, z;
+  ifile >> x >> y >> z;
+  ifile.close();
+
+  T = get_tabletop_rot();
+  ofstream ofile(tt_base_filename);
+  if (!ofile.is_open()) {
+    cout << "Could not open " << tt_base_filename << " for writing" << endl;
+    return false;
+  }
+  ofile << x << " " << y << " " << z;
+  ofile << " " << T(0, 0);
+  ofile << " " << T(0, 1);
+  ofile << " " << T(0, 2);
+  ofile << " " << T(1, 0);
+  ofile << " " << T(1, 1);
+  ofile << " " << T(1, 2);
+  ofile << " " << T(2, 0);
+  ofile << " " << T(2, 1);
+  ofile << " " << T(2, 2);
+  ofile.close();
 
   return true;
 }

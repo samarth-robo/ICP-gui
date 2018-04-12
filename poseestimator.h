@@ -71,7 +71,8 @@ public:
   void process_object();
   void init_icp();
   bool do_icp();
-  bool write_pose_file(std::string pose_filename, std::string scale_filename);
+  bool write_pose_file(std::string pose_filename, std::string scale_filename,
+                       std::string tt_base_filename);
   bool estimate_plane_params();
 
 private:

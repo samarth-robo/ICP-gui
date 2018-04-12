@@ -416,36 +416,6 @@ void PCLViewer::object_process_clicked(bool checked) {
   object_vis->removeAllPointClouds();
   object_vis->addPointCloud<PointT>(pe->get_processed_object(), {1, 0, 0},
                                     "object");
-
-  // save rotation of the turntable base
-  string filename = root_dir + string("/poses/tt_base.txt");
-  ifstream ifile(filename);
-  if (!ifile.is_open()) {
-    cout << "Could not open " << filename << " for reading" << endl;
-    return;
-  }
-  float x, y, z;
-  ifile >> x >> y >> z;
-  ifile.close();
-
-  auto object_pose = pe->get_object_pose();
-  ofstream ofile(filename);
-  if (!ofile.is_open()) {
-    cout << "Could not open " << filename << " for writing" << endl;
-    return;
-  }
-  ofile << x << " " << y << " " << z;
-  ofile << " " << object_pose(0, 0);
-  ofile << " " << object_pose(0, 1);
-  ofile << " " << object_pose(0, 2);
-  ofile << " " << object_pose(1, 0);
-  ofile << " " << object_pose(1, 1);
-  ofile << " " << object_pose(1, 2);
-  ofile << " " << object_pose(2, 0);
-  ofile << " " << object_pose(2, 1);
-  ofile << " " << object_pose(2, 2);
-  ofile.close();
-  cout << "Turntable base rotation written to " << filename << endl;
 }
 
 void PCLViewer::refresh_icp_viewer(bool whole_scene) {
@@ -488,8 +458,10 @@ void PCLViewer::icp_save_clicked(bool checked) {
   string pose_filename = root_dir + string("/poses/tt_frame_") + scene_name +
       string(".txt");
   string scale_filename = root_dir + string("/scale.txt");
-  if (pe->write_pose_file(pose_filename, scale_filename))
-    cout << pose_filename << " and " << scale_filename << " written" << endl;
+  string tt_base_filename = root_dir + string("/poses/tt_base.txt");
+  if (pe->write_pose_file(pose_filename, scale_filename, tt_base_filename))
+    cout << pose_filename << ", " << scale_filename << " and "
+         << tt_base_filename << " written" << endl;
 }
 
 void PCLViewer::dir_select_clicked(bool checked) {
