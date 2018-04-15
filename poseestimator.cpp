@@ -15,14 +15,15 @@
 using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
-                             PointCloudT::ConstPtr const &object_) :
+                             PointCloudT::ConstPtr const &object_,
+                             bool object_flipped) :
   scene_leaf_size(0.001f), object_leaf_size(0.001f), scene_min_height(0.004f),
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(false), scale_axis('z'),
+  icp_estimate_scale(false), scale_axis('z'), object_flipped(object_flipped),
   object_azim(PoseEstimator::tformT::Identity()),
   object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
   object_init_dy(0), object_init_dz(0) {
@@ -54,6 +55,7 @@ void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object_pose = tformT::Identity();
   object_azim = tformT::Identity();
   object_scale = tformT::Identity();
+  object_flip = tformT::Identity();
 }
 
 PointXYZ PoseEstimator::get_scene_box_min_pt() {
@@ -178,30 +180,36 @@ void PoseEstimator::process_scene() {
                       scale_axis, axis_size);
 }
 
-void PoseEstimator::process_object() {
+void PoseEstimator::process_object(float s) {
   // Assumes the object has it's Z axis pointing up!
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
-  // scale by size of object in scene
-  PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
-  float scale = axis_size;
-  switch (scale_axis) {
-  case 'x':
+  if (!object_flipped) {
+    // scale by size of object in scene
+    PointT min_pt, max_pt;
+    getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
+    float scale = axis_size;
+    switch (scale_axis) {
+    case 'x':
       scale /= fabs(max_pt.x - min_pt.x);
       break;
-  case 'y':
+    case 'y':
       scale /= fabs(max_pt.y - min_pt.y);
       break;
-  case 'z':
+    case 'z':
       scale /= fabs(max_pt.z - min_pt.z);
       break;
+    }
+    object_scale = object_pose = object_azim = tformT::Identity();
+    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
+  } else {  // get scale from file produced by PE in non-flipped object
+    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = s;
+    cout << "Object is flipped 180 degrees about X axis" << endl;
+    object_flip(1, 1) = object_flip(2, 2) = -1;
   }
-  object_scale = tformT::Identity();
-  object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
-  cout << "Scaled object by " << scale << "x" << endl;
+  cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }
 
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
@@ -231,7 +239,7 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 
 PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
-  tformT T = object_pose * object_azim * object_scale;
+  tformT T = object_pose * object_azim * object_flip * object_scale;
   transformPointCloud(*object_processed, *out, T);
   return out;
 }
@@ -259,7 +267,7 @@ bool PoseEstimator::do_icp() {
   teSVDT::Ptr te_svd_scale = boost::make_shared<teSVDT>();
   PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
   transformPointCloud(*object_processed, *obj_input,
-                      object_pose*object_azim*object_scale);
+                      object_pose*object_azim*object_flip*object_scale);
   icp.setInputSource(obj_input);
   icp.setInputTarget(scene_processed);
 
@@ -293,7 +301,7 @@ bool PoseEstimator::do_icp() {
 bool PoseEstimator::write_pose_file(std::string pose_filename,
                                     std::string scale_filename,
                                     std::string tt_base_filename) {
-  tformT T = object_pose * object_azim;
+  tformT T = object_pose * object_azim * object_flip;
   Eigen::Quaternionf q(T.block<3, 3>(0, 0));
 
   ofstream f(pose_filename, std::ios_base::app);

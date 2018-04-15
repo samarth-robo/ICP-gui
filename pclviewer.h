@@ -59,6 +59,7 @@ private:
     void refresh_icp_viewer(bool whole_scene = false);
     void init_viewers();
     std::string root_dir, scene_filename;
+    bool object_flipped;
 };
 
 #endif // PCLVIEWER_H

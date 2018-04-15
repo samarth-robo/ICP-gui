@@ -19,7 +19,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui(new Ui::PCLViewer),
   scene_cloud(new PointCloudT()), object_cloud(new PointCloudT()),
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
-  icp_vis(new Vis("ICP")),
+  icp_vis(new Vis("ICP")), object_flipped(false),
   pe(new PoseEstimator()), plane_estimated(false),
   scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
@@ -410,7 +410,17 @@ void PCLViewer::object_process_clicked(bool checked) {
     cout << "WARN: process scene first!" << endl;
     return;
   }
-  pe->process_object();
+  float object_scale = 1.f;
+  if (object_flipped) {
+    string filename = root_dir + string("/scale.txt");
+    ifstream f(filename);
+    if (!f.is_open()) {
+      cout << "Could not open " << filename << " for reading" << endl;
+      throw;
+    }
+    f >> object_scale;
+  }
+  pe->process_object(object_scale);
   object_processed = true;
   cout << "object processed" << endl;
   object_vis->removeAllPointClouds();
@@ -511,6 +521,10 @@ void PCLViewer::dir_select_clicked(bool checked) {
   ui->object_y_line_edit->setText(s);
   s.setNum(z);
   ui->object_z_line_edit->setText(s);
+
+  // see if object has to be flipped
+  object_flipped = root_dir.find("flipped") != string::npos;
+  pe->set_object_flipped(object_flipped);
 }
 
 void PCLViewer::scene_select_combo_box_activated(const QString &text) {

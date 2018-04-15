@@ -12,7 +12,8 @@ private:
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   PoseEstimator(PointCloudT::ConstPtr const &scene = nullptr,
-                PointCloudT::ConstPtr const &object = nullptr);
+                PointCloudT::ConstPtr const &object = nullptr,
+                bool object_flipped=false);
 
   // setters
   void set_scene_leaf_size(float s)  {scene_leaf_size = s;}
@@ -35,6 +36,7 @@ public:
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
+  void set_object_flipped(bool f)    {object_flipped = f;}
 
   // getters
   float get_scene_leaf_size()    {return scene_leaf_size;}
@@ -68,7 +70,7 @@ public:
 
   // other functions
   void process_scene();
-  void process_object();
+  void process_object(float s=1.f);
   void init_icp();
   bool do_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename,
@@ -88,14 +90,14 @@ private:
   object_init_dx, object_init_dy, object_init_dz;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
-  bool icp_use_reciprocal_corr, icp_estimate_scale;
+  bool icp_use_reciprocal_corr, icp_estimate_scale, object_flipped;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_plane_hull_points;
-  tformT object_pose, object_azim, object_scale;
+  tformT object_pose, object_azim, object_scale, object_flip;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
 };
