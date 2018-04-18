@@ -26,7 +26,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   icp_estimate_scale(false), scale_axis('z'), object_flipped(object_flipped),
   object_azim(PoseEstimator::tformT::Identity()),
   object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
-  object_init_dy(0), object_init_dz(0) {
+  object_init_dy(0), object_init_dz(0), forced_object_scale(-1.f) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -100,9 +100,12 @@ bool PoseEstimator::estimate_plane_params() {
   PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
   SACSegmentation<PointT> plane_seg;
   plane_seg.setOptimizeCoefficients(true);
-  plane_seg.setModelType(SACMODEL_PLANE);
+  plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
   plane_seg.setMethodType(SAC_RANSAC);
-  plane_seg.setDistanceThreshold(0.003);
+  plane_seg.setDistanceThreshold(0.002);
+  plane_seg.setMaxIterations(1e6);
+  plane_seg.setAxis({0, 1, 0});
+  plane_seg.setEpsAngle(0.34);  // 20 degrees
   plane_seg.setInputCloud(scene_cropped_subsampled);
   plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
   if (plane_inliers->indices.size() == 0) {
@@ -121,9 +124,10 @@ bool PoseEstimator::estimate_plane_params() {
   hull.setInputCloud(plane_cloud);
   hull.reconstruct(*scene_plane_hull_points);
   if (hull.getDimension() != 2) {
-    console::print_error("Estimated plane pointcloud is not 2D.\n");
-    return false;
-  } else return true;
+    console::print_warn("Estimated plane pointcloud is not 2D.\n");
+    // return false;
+  } // else return true;
+  return true;
 }
 
 void PoseEstimator::process_scene() {
@@ -186,28 +190,34 @@ void PoseEstimator::process_object(float s) {
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
-  if (!object_flipped) {
-    // scale by size of object in scene
-    PointT min_pt, max_pt;
-    getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
-    float scale = axis_size;
-    switch (scale_axis) {
-    case 'x':
-      scale /= fabs(max_pt.x - min_pt.x);
-      break;
-    case 'y':
-      scale /= fabs(max_pt.y - min_pt.y);
-      break;
-    case 'z':
-      scale /= fabs(max_pt.z - min_pt.z);
-      break;
+  if (forced_object_scale < 0.f) {
+    if (!object_flipped) {
+      // scale by size of object in scene
+      PointT min_pt, max_pt;
+      getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
+      float scale = axis_size;
+      switch (scale_axis) {
+      case 'x':
+        scale /= fabs(max_pt.x - min_pt.x);
+        break;
+      case 'y':
+        scale /= fabs(max_pt.y - min_pt.y);
+        break;
+      case 'z':
+        scale /= fabs(max_pt.z - min_pt.z);
+        break;
+      }
+      object_scale = object_pose = object_azim = tformT::Identity();
+      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
+    } else {  // get scale from file produced by PE in non-flipped object
+      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = s;
+      cout << "Object is flipped 180 degrees about X axis" << endl;
+      object_flip(1, 1) = object_flip(2, 2) = -1;
     }
-    object_scale = object_pose = object_azim = tformT::Identity();
-    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
-  } else {  // get scale from file produced by PE in non-flipped object
-    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = s;
-    cout << "Object is flipped 180 degrees about X axis" << endl;
-    object_flip(1, 1) = object_flip(2, 2) = -1;
+  } else {
+      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
+          forced_object_scale;
+      cout << "Object scale forced" << endl;
   }
   cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }

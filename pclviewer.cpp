@@ -74,6 +74,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_corr_dist_changed);
   connect(ui->icp_outlier_dist_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::icp_outlier_dist_changed);
+  connect(ui->forced_object_scale_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::forced_object_scale_changed);
   connect(ui->icp_recip_corr_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_recip_corr_clicked);
   connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
@@ -124,6 +126,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->object_dy_line_edit->setText(s);
   s.setNum(pe->get_object_init_dz());
   ui->object_dz_line_edit->setText(s);
+  s.setNum(pe->get_forced_object_scale());
+  ui->forced_object_scale_line_edit->setText(s);
   s.setNum(pe->get_object_init_azim());
   ui->object_init_azimuth_line_edit->setText(s);
   s.setNum(pe->get_icp_outlier_dist());
@@ -329,6 +333,18 @@ void PCLViewer::icp_corr_dist_changed(const QString &t) {
   }
 }
 
+void PCLViewer::forced_object_scale_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_forced_object_scale(s);
+    cout << "Set forced object scale to " << s << endl;
+  } else {
+    cout << "ERROR: wrong forced object scale " << t.toStdString()
+         << endl;
+  }
+}
+
 void PCLViewer::icp_recip_corr_clicked(int state) {
   switch (state) {
   case Qt::Unchecked:
@@ -360,20 +376,21 @@ void PCLViewer::icp_estimate_scale_clicked(int state) {
 }
 
 void PCLViewer::scene_estimate_plane_clicked(bool checked) {
+  auto min_pt = pe->get_scene_box_min_pt();
+  auto max_pt = pe->get_scene_box_max_pt();
+  scene_vis->removeAllShapes();
+  scene_vis->addCube(min_pt, max_pt);
+  PointXYZ p(pe->get_object_init_x(), pe->get_object_init_y(),
+             pe->get_object_init_z());
+  scene_vis->addSphere(p, 0.005, {1, 0, 1});
+
   if (!pe->estimate_plane_params()) {
     cout << "WARN: Could not estimate plane" << endl;
     return;
   }
   plane_estimated = true;
-  auto min_pt = pe->get_scene_box_min_pt();
-  auto max_pt = pe->get_scene_box_max_pt();
-  scene_vis->removeAllShapes();
-  scene_vis->addCube(min_pt, max_pt);
   scene_vis->addPlane(pe->get_scene_plane_coeffs(), pe->get_object_init_x(),
                       pe->get_object_init_y(), pe->get_object_init_z());
-  PointXYZ p(pe->get_object_init_x(), pe->get_object_init_y(),
-             pe->get_object_init_z());
-  scene_vis->addSphere(p, 0.005, {1, 0, 1});
   cout << "Plane estimated, plane and box drawn" << endl;
 }
 

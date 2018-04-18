@@ -36,6 +36,7 @@ public slots:
     void scene_boxsize_changed(const QString &t);
     void icp_corr_dist_changed(const QString &t);
     void icp_outlier_dist_changed(const QString &t);
+    void forced_object_scale_changed(const QString &t);
     void icp_recip_corr_clicked(int state);
     void icp_estimate_scale_clicked(int state);
     void scene_estimate_plane_clicked(bool checked);
