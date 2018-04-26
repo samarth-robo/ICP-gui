@@ -114,14 +114,42 @@ bool PoseEstimator::estimate_plane_params() {
   } else console::print_info("done.\n");
 
   // plane pointlcoud and hull
+  float a(object_init_x), b(object_init_y), c(object_init_z),
+      nx(scene_plane_coeffs->values[0]), ny(scene_plane_coeffs->values[1]),
+      nz(scene_plane_coeffs->values[2]), d(scene_plane_coeffs->values[3]);
+  float t = (-d - (a*nx + b*ny + c*nz)) / (nx*nx + ny*ny + nz*nz);
+  PointXYZ p(a+t*nx, b+t*ny, c+t*nz);  // point on the TT plane
+  tformT T = invert_pose(get_tabletop_rot());
+  T(0, 3) = p.x;
+  T(1, 3) = p.y;
+  T(2, 3) = p.z;
+
+  PointCloudT::Ptr grid = boost::make_shared<PointCloudT>();
+  int N = 25;  // size of grid
+  d = 0.1;  // distance between grid points (m)
+  for (int x = 0; x < N; x++) {
+    for (int y = 0; y < N; y++) {
+      PointT g(UINT8_MAX, UINT8_MAX, UINT8_MAX);
+      g.x = (x - N/2)*d;
+      g.y = (y - N/2)*d;
+      g.z = 0.f;
+      grid->push_back(g);
+    }
+  }
+  // transform grid to lie on turntable
+  transformPointCloud(*grid, *grid, T);
+
+  /*
   PointCloudT::Ptr plane_cloud = boost::make_shared<PointCloudT>();
   ExtractIndices<PointT> extract;
   extract.setInputCloud(scene_cropped_subsampled);
   extract.setIndices(plane_inliers);
   extract.setNegative(false);
   extract.filter(*plane_cloud);
+  */
   ConvexHull<PointT> hull;
-  hull.setInputCloud(plane_cloud);
+  // hull.setInputCloud(plane_cloud);
+  hull.setInputCloud(grid);
   hull.reconstruct(*scene_plane_hull_points);
   if (hull.getDimension() != 2) {
     console::print_warn("Estimated plane pointcloud is not 2D.\n");
@@ -222,6 +250,7 @@ void PoseEstimator::process_object(float s) {
   cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }
 
+// gives rotation of turntable w.r.t. camera
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
   // unit normal to plane
   float a = scene_plane_coeffs->values[0], b = scene_plane_coeffs->values[1],
