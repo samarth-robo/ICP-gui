@@ -38,6 +38,7 @@ public:
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
   void set_object_flipped(bool f)    {object_flipped = f;}
+  void set_tt_pose(const tformT &T);
 
   // getters
   float get_scene_leaf_size()    {return scene_leaf_size;}
@@ -75,8 +76,8 @@ public:
   void process_object(float s=1.f);
   void init_icp();
   bool do_icp();
-  bool write_pose_file(std::string pose_filename, std::string scale_filename,
-                       std::string tt_base_filename);
+  bool write_pose_file(std::string pose_filename, std::string scale_filename);
+  bool write_tt_file(std::string tt_base_filename);
   bool estimate_plane_params();
 
 private:
@@ -103,6 +104,7 @@ private:
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
   float forced_object_scale;
+  Eigen::Vector3f tt_axis;  // turntable axis of rotation
 };
 
 #endif // POSEESTIMATOR_H

@@ -40,10 +40,8 @@ public slots:
     void icp_recip_corr_clicked(int state);
     void icp_estimate_scale_clicked(int state);
     void scene_estimate_plane_clicked(bool checked);
+    void scene_save_plane_clicked(bool checked);
     void scene_process_clicked(bool checked);
-    void object_scale_x_clicked(bool checked);
-    void object_scale_y_clicked(bool checked);
-    void object_scale_z_clicked(bool checked);
     void object_process_clicked(bool checked);
     void icp_init_clicked(bool checked);
     void icp_process_clicked(bool checked);
@@ -53,7 +51,8 @@ protected:
     boost::shared_ptr<Vis> scene_vis, object_vis, icp_vis;
     PointCloudT::Ptr scene_cloud, object_cloud;
     boost::shared_ptr<PoseEstimator> pe;
-    bool plane_estimated, scene_processed, object_processed, icp_initialized;
+    bool plane_estimated, plane_locked, scene_processed, object_processed,
+    icp_initialized;
 
 private:
     Ui::PCLViewer *ui;

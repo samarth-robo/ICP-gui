@@ -47,6 +47,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
 void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
   scene = p;
   scene_vox.setInputCloud(scene);
+  // crop and subsample scene
+  crop_subsample_scene();
 }
 
 void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
@@ -56,6 +58,14 @@ void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object_azim = tformT::Identity();
   object_scale = tformT::Identity();
   object_flip = tformT::Identity();
+}
+
+void PoseEstimator::set_tt_pose(const tformT &T) {
+  set_object_init_x(T(0, 3));
+  set_object_init_y(T(1, 3));
+  set_object_init_z(T(2, 3));
+  Eigen::Matrix3f R = T.block<3, 3>(0, 0);
+  tt_axis = R * Eigen::Vector3f(0, 0, 1);
 }
 
 PointXYZ PoseEstimator::get_scene_box_min_pt() {
@@ -92,9 +102,6 @@ void PoseEstimator::crop_subsample_scene() {
 }
 
 bool PoseEstimator::estimate_plane_params() {
-  // crop and subsample scene
-  crop_subsample_scene();
-
   // estimate the plane
   console::print_info("Estimating plane...");
   PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
@@ -102,10 +109,10 @@ bool PoseEstimator::estimate_plane_params() {
   plane_seg.setOptimizeCoefficients(true);
   plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
   plane_seg.setMethodType(SAC_RANSAC);
-  plane_seg.setDistanceThreshold(0.002);
+  plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
   plane_seg.setMaxIterations(1e6);
-  plane_seg.setAxis({0, 1, 0});
-  plane_seg.setEpsAngle(0.34);  // 20 degrees
+  plane_seg.setAxis(tt_axis);
+  plane_seg.setEpsAngle(5 * M_PI/180.0);
   plane_seg.setInputCloud(scene_cropped_subsampled);
   plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
   if (plane_inliers->indices.size() == 0) {
@@ -119,14 +126,11 @@ bool PoseEstimator::estimate_plane_params() {
       nz(scene_plane_coeffs->values[2]), d(scene_plane_coeffs->values[3]);
   float t = (-d - (a*nx + b*ny + c*nz)) / (nx*nx + ny*ny + nz*nz);
   PointXYZ p(a+t*nx, b+t*ny, c+t*nz);  // point on the TT plane
-  tformT T = invert_pose(get_tabletop_rot());
-  T(0, 3) = p.x;
-  T(1, 3) = p.y;
-  T(2, 3) = p.z;
 
+  // make grid of points
   PointCloudT::Ptr grid = boost::make_shared<PointCloudT>();
-  int N = 25;  // size of grid
-  d = 0.1;  // distance between grid points (m)
+  int N = 100;  // size of grid
+  d = 0.005;  // distance between grid points (m)
   for (int x = 0; x < N; x++) {
     for (int y = 0; y < N; y++) {
       PointT g(UINT8_MAX, UINT8_MAX, UINT8_MAX);
@@ -137,25 +141,20 @@ bool PoseEstimator::estimate_plane_params() {
     }
   }
   // transform grid to lie on turntable
+  tformT T = get_tabletop_rot();
+  T(0, 3) = p.x;
+  T(1, 3) = p.y;
+  T(2, 3) = p.z;
   transformPointCloud(*grid, *grid, T);
 
-  /*
-  PointCloudT::Ptr plane_cloud = boost::make_shared<PointCloudT>();
-  ExtractIndices<PointT> extract;
-  extract.setInputCloud(scene_cropped_subsampled);
-  extract.setIndices(plane_inliers);
-  extract.setNegative(false);
-  extract.filter(*plane_cloud);
-  */
+  // make convex hull from turntable points
   ConvexHull<PointT> hull;
-  // hull.setInputCloud(plane_cloud);
   hull.setInputCloud(grid);
   hull.reconstruct(*scene_plane_hull_points);
   if (hull.getDimension() != 2) {
     console::print_warn("Estimated plane pointcloud is not 2D.\n");
-    // return false;
-  } // else return true;
-  return true;
+    return false;
+  } else return true;
 }
 
 void PoseEstimator::process_scene() {
@@ -168,15 +167,16 @@ void PoseEstimator::process_scene() {
   T(2, 3) = object_init_z;
   T = invert_pose(T * get_tabletop_rot());
   PointCloudT::Ptr scene_aligned = boost::make_shared<PointCloudT>();
+  PointCloudT::Ptr hull_aligned = boost::make_shared<PointCloudT>();
   transformPointCloud(*scene_cropped_subsampled, *scene_aligned, T);
-  transformPointCloud(*scene_plane_hull_points, *scene_plane_hull_points, T);
+  transformPointCloud(*scene_plane_hull_points, *hull_aligned, T);
 
   // segment object sticking out of the plane
   ExtractPolygonalPrismData<PointT> prism;
   prism.setViewPoint(0, 0, 1);
   PointIndicesPtr idx = boost::make_shared<PointIndices>();
   prism.setInputCloud(scene_aligned);
-  prism.setInputPlanarHull(scene_plane_hull_points);
+  prism.setInputPlanarHull(hull_aligned);
   ExtractIndices<PointT> extract;
   extract.setInputCloud(scene_aligned);
   extract.setNegative(false);
@@ -200,9 +200,11 @@ void PoseEstimator::process_scene() {
   switch (scale_axis) {
   case 'x':
       axis_size = fabs(max_pt.x - min_pt.x);
+      console::print_warn("Scaling by X axis not recommended!");
       break;
   case 'y':
       axis_size = fabs(max_pt.y - min_pt.y);
+      console::print_warn("Scaling by Y axis not recommended!");
       break;
   case 'z':
       axis_size = fabs(max_pt.z - min_pt.z);
@@ -338,8 +340,7 @@ bool PoseEstimator::do_icp() {
 }
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
-                                    std::string scale_filename,
-                                    std::string tt_base_filename) {
+                                    std::string scale_filename) {
   tformT T = object_pose * object_azim * object_flip;
   Eigen::Quaternionf q(T.block<3, 3>(0, 0));
 
@@ -372,22 +373,17 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   f << object_scale(0, 0) << endl;
   f.close();
 
-  ifstream ifile(tt_base_filename);
-  if (!ifile.is_open()) {
-    cout << "Could not open " << tt_base_filename << " for reading" << endl;
-    return false;
-  }
-  float x, y, z;
-  ifile >> x >> y >> z;
-  ifile.close();
+  return true;
+}
 
-  T = get_tabletop_rot();
+bool PoseEstimator::write_tt_file(std::string tt_base_filename) {
+  tformT T = get_tabletop_rot();
   ofstream ofile(tt_base_filename);
   if (!ofile.is_open()) {
     cout << "Could not open " << tt_base_filename << " for writing" << endl;
     return false;
   }
-  ofile << x << " " << y << " " << z;
+  ofile << object_init_x << " " << object_init_y << " " << object_init_z;
   ofile << " " << T(0, 0);
   ofile << " " << T(0, 1);
   ofile << " " << T(0, 2);
@@ -396,7 +392,11 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   ofile << " " << T(1, 2);
   ofile << " " << T(2, 0);
   ofile << " " << T(2, 1);
-  ofile << " " << T(2, 2);
+  ofile << " " << T(2, 2) << endl;
+  ofile << scene_plane_coeffs->values[0] << " ";
+  ofile << scene_plane_coeffs->values[1] << " ";
+  ofile << scene_plane_coeffs->values[2] << " ";
+  ofile << scene_plane_coeffs->values[3];
   ofile.close();
 
   return true;

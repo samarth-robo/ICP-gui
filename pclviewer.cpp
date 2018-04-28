@@ -20,7 +20,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   scene_cloud(new PointCloudT()), object_cloud(new PointCloudT()),
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
   icp_vis(new Vis("ICP")), object_flipped(false),
-  pe(new PoseEstimator()), plane_estimated(false),
+  pe(new PoseEstimator()), plane_estimated(false), plane_locked(false),
   scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
   ui->setupUi(this);
@@ -80,16 +80,12 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_recip_corr_clicked);
   connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_estimate_scale_clicked);
-  connect(ui->object_scale_x_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_x_clicked);
-  connect(ui->object_scale_y_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_y_clicked);
-  connect(ui->object_scale_z_radiobutton, &QRadioButton::clicked, this,
-          &PCLViewer::object_scale_z_clicked);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_process_clicked);
   connect(ui->scene_estimate_plane_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_estimate_plane_clicked);
+  connect(ui->scene_save_plane_button, &QAbstractButton::clicked, this,
+          &PCLViewer::scene_save_plane_clicked);
   connect(ui->object_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::object_process_clicked);
   connect(ui->icp_init_button, &QAbstractButton::clicked, this,
@@ -136,18 +132,6 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->icp_corr_dist_line_edit->setText(s);
   ui->icp_recip_corr_checkbox->setChecked(pe->get_icp_use_recip_corr());
   ui->icp_estimate_scale_checkbox->setChecked(pe->get_icp_estimate_scale());
-  switch (pe->get_scale_axis()) {
-   case 'x':
-      ui->object_scale_x_radiobutton->setChecked(true);
-      break;
-   case 'y':
-      ui->object_scale_y_radiobutton->setChecked(true);
-      break;
-   case 'z':
-      ui->object_scale_z_radiobutton->setChecked(true);
-  }
-
-
 }
 
 PCLViewer::~PCLViewer() {
@@ -384,14 +368,20 @@ void PCLViewer::scene_estimate_plane_clicked(bool checked) {
              pe->get_object_init_z());
   scene_vis->addSphere(p, 0.005, {1, 0, 1});
 
-  if (!pe->estimate_plane_params()) {
-    cout << "WARN: Could not estimate plane" << endl;
-    return;
+  if (!plane_locked) {
+    if (!pe->estimate_plane_params()) {
+      cout << "WARN: Could not estimate plane" << endl;
+      return;
+    }
+    plane_estimated = true;
+    cout << "Plane estimated" << endl;
+  } else {
+    plane_estimated = true;
+    cout << "Previous plane estimate used" << endl;
   }
-  plane_estimated = true;
   scene_vis->addPlane(pe->get_scene_plane_coeffs(), pe->get_object_init_x(),
                       pe->get_object_init_y(), pe->get_object_init_z());
-  cout << "Plane estimated, plane and box drawn" << endl;
+  cout << "Plane and box drawn" << endl;
 }
 
 void PCLViewer::scene_process_clicked(bool checked) {
@@ -405,21 +395,6 @@ void PCLViewer::scene_process_clicked(bool checked) {
   scene_vis->removeAllPointClouds();
   scene_vis->removeAllShapes();
   scene_vis->addPointCloud(pe->get_processed_scene(), "scene");
-}
-
-void PCLViewer::object_scale_x_clicked(bool checked) {
-    pe->set_scale_axis('x');
-    cout << "Scaling object using X axis" << endl;
-}
-
-void PCLViewer::object_scale_y_clicked(bool checked) {
-    pe->set_scale_axis('y');
-    cout << "Scaling object using Y axis" << endl;
-}
-
-void PCLViewer::object_scale_z_clicked(bool checked) {
-    pe->set_scale_axis('z');
-    cout << "Scaling object using Z axis" << endl;
 }
 
 void PCLViewer::object_process_clicked(bool checked) {
@@ -485,10 +460,18 @@ void PCLViewer::icp_save_clicked(bool checked) {
   string pose_filename = root_dir + string("/poses/tt_frame_") + scene_name +
       string(".txt");
   string scale_filename = root_dir + string("/scale.txt");
-  string tt_base_filename = root_dir + string("/poses/tt_base.txt");
-  if (pe->write_pose_file(pose_filename, scale_filename, tt_base_filename))
-    cout << pose_filename << ", " << scale_filename << " and "
-         << tt_base_filename << " written" << endl;
+  if (pe->write_pose_file(pose_filename, scale_filename))
+    cout << pose_filename << " and " << scale_filename << " written" << endl;
+}
+
+void PCLViewer::scene_save_plane_clicked(bool checked) {
+  if (plane_estimated) {
+    string tt_base_filename = root_dir + string("/poses/tt_base_processed.txt");
+    if (pe->write_tt_file(tt_base_filename)) {
+      plane_locked = true;
+      cout << tt_base_filename << " written" << endl;
+    }
+  } else console::print_warn("Estimate plane first!");
 }
 
 void PCLViewer::dir_select_clicked(bool checked) {
@@ -525,18 +508,28 @@ void PCLViewer::dir_select_clicked(bool checked) {
 
   // read init XYZ info from txt file
   ifstream f(root_dir + string("/poses/tt_base.txt"));
-  float x, y, z;
-  f >> x >> y >> z;
-  pe->set_object_init_x(x);
-  pe->set_object_init_y(y);
-  pe->set_object_init_z(z);
+  Eigen::Matrix4f T = Eigen::Matrix4f::Identity();
+  float x;
+  f >> x; T(0, 3) = x;
+  f >> x; T(1, 3) = x;
+  f >> x; T(2, 3) = x;
+  f >> x; T(0, 0) = x;
+  f >> x; T(0, 1) = x;
+  f >> x; T(0, 2) = x;
+  f >> x; T(1, 0) = x;
+  f >> x; T(1, 1) = x;
+  f >> x; T(1, 2) = x;
+  f >> x; T(2, 0) = x;
+  f >> x; T(2, 1) = x;
+  f >> x; T(2, 2) = x;
   f.close();
+  pe->set_tt_pose(T);
   QString s;
-  s.setNum(x);
+  s.setNum(T(0, 3));
   ui->object_x_line_edit->setText(s);
-  s.setNum(y);
+  s.setNum(T(1, 3));
   ui->object_y_line_edit->setText(s);
-  s.setNum(z);
+  s.setNum(T(2, 3));
   ui->object_z_line_edit->setText(s);
 
   // see if object has to be flipped
@@ -547,6 +540,7 @@ void PCLViewer::dir_select_clicked(bool checked) {
 void PCLViewer::scene_select_combo_box_activated(const QString &text) {
   scene_filename = text.toStdString();
   init_viewers();
+  plane_estimated = scene_processed = object_processed = icp_initialized = false;
   cout << "Scene set to " << root_dir + string("/pointclouds/") + scene_filename
        << endl;
 }
