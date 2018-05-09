@@ -76,6 +76,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_outlier_dist_changed);
   connect(ui->forced_object_scale_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::forced_object_scale_changed);
+  connect(ui->height_adjust_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::height_adjust_changed);
   connect(ui->icp_recip_corr_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_recip_corr_clicked);
   connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
@@ -124,6 +126,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->object_dz_line_edit->setText(s);
   s.setNum(pe->get_forced_object_scale());
   ui->forced_object_scale_line_edit->setText(s);
+  s.setNum(pe->get_height_adjust());
+  ui->height_adjust_line_edit->setText(s);
   s.setNum(pe->get_object_init_azim());
   ui->object_init_azimuth_line_edit->setText(s);
   s.setNum(pe->get_icp_outlier_dist());
@@ -325,6 +329,18 @@ void PCLViewer::forced_object_scale_changed(const QString &t) {
     cout << "Set forced object scale to " << s << endl;
   } else {
     cout << "ERROR: wrong forced object scale " << t.toStdString()
+         << endl;
+  }
+}
+
+void PCLViewer::height_adjust_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_height_adjust(s);
+    cout << "Set height adjustment to " << s << endl;
+  } else {
+    cout << "ERROR: wrong height adjustment " << t.toStdString()
          << endl;
   }
 }

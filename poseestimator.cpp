@@ -24,7 +24,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
   icp_estimate_scale(false), scale_axis('z'), object_flipped(object_flipped),
-  object_azim(PoseEstimator::tformT::Identity()),
+  object_azim(PoseEstimator::tformT::Identity()), height_adjust(0.007),
   object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
   object_init_dy(0), object_init_dz(0), forced_object_scale(-1.f) {
   if (scene_) {
@@ -186,6 +186,11 @@ void PoseEstimator::process_scene() {
   extract.setIndices(idx);
   extract.filter(*scene_processed);
 
+  // fudge factor
+  T = tformT::Identity();
+  T(2, 3) = height_adjust;
+  transformPointCloud(*scene_processed, *scene_processed, T);
+
   // remove noise
   // StatisticalOutlierRemoval<PointT> sor;
   // sor.setInputCloud(obj);
@@ -280,7 +285,9 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 
 PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
-  tformT T = object_pose * object_azim * object_flip * object_scale;
+  tformT Tf = tformT::Identity();
+  Tf(2, 3) = -height_adjust;
+  tformT T = object_pose * Tf * object_azim * object_flip * object_scale;
   transformPointCloud(*object_processed, *out, T);
   return out;
 }

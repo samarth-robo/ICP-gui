@@ -34,6 +34,7 @@ public:
   void set_forced_object_scale(float s) {forced_object_scale = s;}
   void set_icp_use_recip_corr(bool s){icp_use_reciprocal_corr = s;}
   void set_icp_estimate_scale(bool s){icp_estimate_scale = s;}
+  void set_height_adjust(float s)    {height_adjust = s;}
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
@@ -59,6 +60,7 @@ public:
   float get_icp_outlier_dist()   {return icp_outlier_rejection_thresh;}
   float get_icp_corr_dist()      {return icp_max_corr_distance;}
   float get_forced_object_scale(){return forced_object_scale;}
+  float get_height_adjust()      {return height_adjust;}
   bool  get_icp_use_recip_corr() {return icp_use_reciprocal_corr;}
   bool  get_icp_estimate_scale() {return icp_estimate_scale;}
   char  get_scale_axis()         {return scale_axis;}
@@ -104,6 +106,7 @@ private:
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
   float forced_object_scale;
+  float height_adjust;  // adjustment to height of object
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
 };
 
