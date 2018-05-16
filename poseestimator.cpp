@@ -24,7 +24,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
   icp_estimate_scale(false), scale_axis('z'), object_flipped(object_flipped),
-  object_azim(PoseEstimator::tformT::Identity()), height_adjust(0.007),
+  object_azim(PoseEstimator::tformT::Identity()), height_adjust(0.000),
   object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
   object_init_dy(0), object_init_dz(0), forced_object_scale(-1.f) {
   if (scene_) {
@@ -331,9 +331,8 @@ bool PoseEstimator::do_icp() {
     cout << "ICP converged" << endl;
 
     // get final object pose
-    tformT T = icp.getFinalTransformation();
-    object_pose = T * object_pose;
-    T = tformT::Identity();
+    object_pose = icp.getFinalTransformation() * object_pose;
+    tformT T = tformT::Identity();
     T(0, 3) = object_init_x;
     T(1, 3) = object_init_y;
     T(2, 3) = object_init_z;
