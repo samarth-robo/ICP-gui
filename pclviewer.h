@@ -25,7 +25,7 @@ public slots:
     void scene_select_combo_box_activated(const QString &text);
     void scene_leaf_size_changed(const QString &t);
     void object_leaf_size_changed(const QString &t);
-    void scene_min_height_changed(const QString &t);
+    void object_height_changed(const QString &t);
     void object_init_x_changed(const QString &t);
     void object_init_y_changed(const QString &t);
     void object_init_z_changed(const QString &t);
@@ -60,7 +60,6 @@ private:
     void refresh_icp_viewer(bool whole_scene = false);
     void init_viewers();
     std::string root_dir, scene_filename;
-    bool object_flipped;
 };
 
 #endif // PCLVIEWER_H

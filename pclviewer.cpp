@@ -19,7 +19,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui(new Ui::PCLViewer),
   scene_cloud(new PointCloudT()), object_cloud(new PointCloudT()),
   scene_vis(new Vis("scene")), object_vis(new Vis("object")),
-  icp_vis(new Vis("ICP")), object_flipped(false),
+  icp_vis(new Vis("ICP")),
   pe(new PoseEstimator()), plane_estimated(false), plane_locked(false),
   scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
@@ -52,8 +52,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::scene_leaf_size_changed);
   connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_leaf_size_changed);
-  connect(ui->scene_minheight_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::scene_min_height_changed);
+  connect(ui->object_height_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::object_height_changed);
   connect(ui->object_x_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_init_x_changed);
   connect(ui->object_y_line_edit, &QLineEdit::textEdited, this,
@@ -110,8 +110,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui-> scene_leaf_size_line_edit->setText(s);
   s.setNum(pe->get_scene_boxsize_x());
   ui->scene_boxsize_line_edit->setText(s);
-  s.setNum(pe->get_scene_min_height());
-  ui->scene_minheight_line_edit->setText(s);
+  s.setNum(pe->get_object_height());
+  ui->object_height_line_edit->setText(s);
   s.setNum(pe->get_object_init_x());
   ui->object_x_line_edit->setText(s);
   s.setNum(pe->get_object_init_y());
@@ -192,13 +192,13 @@ void PCLViewer::object_leaf_size_changed(const QString &t) {
   }
 }
 
-void PCLViewer::scene_min_height_changed(const QString &t) {
+void PCLViewer::object_height_changed(const QString &t) {
   bool ok = false;
-  float s = t.toFloat(&ok);
+  float s = t.toFloat(&ok) / 100;
   if (ok) {
-    pe->set_scene_min_height(s);
+    pe->set_object_height(s);
     scene_processed = false;
-    cout << "Set scene min. height to " << s << endl;
+    cout << "Set object height to " << s << endl;
   } else {
     cout << "ERROR: wrong height above table " << t.toStdString() << endl;
   }
@@ -206,7 +206,7 @@ void PCLViewer::scene_min_height_changed(const QString &t) {
 
 void PCLViewer::object_init_x_changed(const QString &t) {
   bool ok = false;
-  float s = t.toFloat(&ok);
+  float s = t.toFloat(&ok) / 100;
   if (ok) {
     pe->set_object_init_x(s);
     scene_processed = false;
@@ -242,7 +242,7 @@ void PCLViewer::object_init_z_changed(const QString &t) {
 
 void PCLViewer::object_init_dx_changed(const QString &t) {
   bool ok = false;
-  float s = t.toFloat(&ok);
+  float s = t.toFloat(&ok) / 100;
   if (ok) {
     pe->set_object_init_dx(s);
     cout << "Set object init dX to " << s << endl;
@@ -253,7 +253,7 @@ void PCLViewer::object_init_dx_changed(const QString &t) {
 
 void PCLViewer::object_init_dy_changed(const QString &t) {
   bool ok = false;
-  float s = t.toFloat(&ok);
+  float s = t.toFloat(&ok) / 100;
   if (ok) {
     pe->set_object_init_dy(s);
     cout << "Set object init dY to " << s << endl;
@@ -264,7 +264,7 @@ void PCLViewer::object_init_dy_changed(const QString &t) {
 
 void PCLViewer::object_init_dz_changed(const QString &t) {
   bool ok = false;
-  float s = t.toFloat(&ok);
+  float s = t.toFloat(&ok) / 100;
   if (ok) {
     pe->set_object_init_dz(s);
     cout << "Set object init dZ to " << s << endl;
@@ -418,17 +418,7 @@ void PCLViewer::object_process_clicked(bool checked) {
     cout << "WARN: process scene first!" << endl;
     return;
   }
-  float object_scale = 1.f;
-  if (object_flipped) {
-    string filename = root_dir + string("/scale.txt");
-    ifstream f(filename);
-    if (!f.is_open()) {
-      cout << "Could not open " << filename << " for reading" << endl;
-      throw;
-    }
-    f >> object_scale;
-  }
-  pe->process_object(object_scale);
+  pe->process_object();
   object_processed = true;
   cout << "object processed" << endl;
   object_vis->removeAllPointClouds();
@@ -548,9 +538,15 @@ void PCLViewer::dir_select_clicked(bool checked) {
   s.setNum(T(2, 3));
   ui->object_z_line_edit->setText(s);
 
-  // see if object has to be flipped
-  object_flipped = root_dir.find("flipped") != string::npos;
-  pe->set_object_flipped(object_flipped);
+  // read parameters for flipping object
+  f.open(root_dir + string("/object_flip.txt"));
+  float object_flip_x(0), object_flip_y(0), object_flip_z(0);
+  if (!f.is_open())
+      cout << "WARN: could not read flip parameters, setting to 0" << endl;
+  f >> object_flip_x >> object_flip_y >> object_flip_z;
+  pe->set_object_flip_x(object_flip_x);
+  pe->set_object_flip_y(object_flip_y);
+  pe->set_object_flip_z(object_flip_z);
 }
 
 void PCLViewer::scene_select_combo_box_activated(const QString &text) {

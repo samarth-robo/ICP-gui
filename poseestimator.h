@@ -12,16 +12,15 @@ private:
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   PoseEstimator(PointCloudT::ConstPtr const &scene = nullptr,
-                PointCloudT::ConstPtr const &object = nullptr,
-                bool object_flipped=false);
+                PointCloudT::ConstPtr const &object = nullptr);
 
   // setters
   void set_scene_leaf_size(float s)  {scene_leaf_size = s;}
   void set_object_leaf_size(float s) {object_leaf_size = s;}
-  void set_scene_min_height(float s) {scene_min_height = s;}
   void set_scene_boxsize_x(float s)  {scene_boxsize_x = s;}
   void set_scene_boxsize_y(float s)  {scene_boxsize_y = s;}
   void set_scene_boxsize_z(float s)  {scene_boxsize_z = s;}
+  void set_object_height(float s)    {object_height = s;}
   void set_object_init_x(float s)    {object_init_x = s;}
   void set_object_init_y(float s)    {object_init_y = s;}
   void set_object_init_z(float s)    {object_init_z = s;}
@@ -38,18 +37,20 @@ public:
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
-  void set_object_flipped(bool f)    {object_flipped = f;}
   void set_tt_pose(const tformT &T);
+  void set_object_flip_x(float s)    {object_flip_x = s;}
+  void set_object_flip_y(float s)    {object_flip_y = s;}
+  void set_object_flip_z(float s)    {object_flip_z = s;}
 
   // getters
   float get_scene_leaf_size()    {return scene_leaf_size;}
   float get_object_leaf_size()   {return object_leaf_size;}
-  float get_scene_min_height()   {return scene_min_height;}
   float get_scene_boxsize_x()    {return scene_boxsize_x;}
   float get_scene_boxsize_y()    {return scene_boxsize_y;}
   float get_scene_boxsize_z()    {return scene_boxsize_z;}
   pcl::PointXYZ get_scene_box_min_pt();
   pcl::PointXYZ get_scene_box_max_pt();
+  float get_object_height()      {return object_height;}
   float get_object_init_x()      {return object_init_x;}
   float get_object_init_y()      {return object_init_y;}
   float get_object_init_z()      {return object_init_z;}
@@ -75,7 +76,7 @@ public:
 
   // other functions
   void process_scene();
-  void process_object(float s=1.f);
+  void process_object();
   void init_icp();
   bool do_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
@@ -89,13 +90,12 @@ private:
   tformT invert_pose(tformT const &in);
 
   float scene_leaf_size, object_leaf_size;
-  float scene_min_height;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;
   float object_init_x, object_init_y, object_init_z, object_init_azim,
-  object_init_dx, object_init_dy, object_init_dz;
+  object_init_dx, object_init_dy, object_init_dz, object_height;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
-  bool icp_use_reciprocal_corr, icp_estimate_scale, object_flipped;
+  bool icp_use_reciprocal_corr, icp_estimate_scale;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;
@@ -108,6 +108,7 @@ private:
   float forced_object_scale;
   float height_adjust;  // adjustment to height of object
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
+  float object_flip_x, object_flip_y, object_flip_z;
 };
 
 #endif // POSEESTIMATOR_H

@@ -15,18 +15,22 @@
 using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
-                             PointCloudT::ConstPtr const &object_,
-                             bool object_flipped) :
-  scene_leaf_size(0.001f), object_leaf_size(0.001f), scene_min_height(0.004f),
+                             PointCloudT::ConstPtr const &object_) :
+  scene_leaf_size(0.001f), object_leaf_size(0.001f), object_height(0.f),
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
-  object_init_azim(0.f), object_pose(PoseEstimator::tformT::Identity()),
+  object_init_azim(0.f),
+  object_flip_x(0.f), object_flip_y(0.f), object_flip_z(0.f),
+  object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(false), scale_axis('z'), object_flipped(object_flipped),
-  object_azim(PoseEstimator::tformT::Identity()), height_adjust(0.000),
-  object_scale(PoseEstimator::tformT::Identity()), object_init_dx(0),
-  object_init_dy(0), object_init_dz(0), forced_object_scale(-1.f) {
+  icp_estimate_scale(false),
+  scale_axis('z'),
+  object_azim(PoseEstimator::tformT::Identity()),
+  height_adjust(0.000),
+  object_scale(PoseEstimator::tformT::Identity()),
+  object_init_dx(0), object_init_dy(0), object_init_dz(0),
+  forced_object_scale(-1.f) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -181,6 +185,13 @@ void PoseEstimator::process_scene() {
   extract.setInputCloud(scene_aligned);
   extract.setNegative(false);
 
+  prism.setHeightLimits(0, scene_boxsize_z);
+  prism.segment(*idx);
+  extract.setIndices(idx);
+  extract.filter(*scene_processed);
+  PointT min_pt, max_pt;
+  getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
+  float scene_min_height = max_pt.z - min_pt.z - object_height;
   prism.setHeightLimits(scene_min_height, scene_boxsize_z);
   prism.segment(*idx);
   extract.setIndices(idx);
@@ -200,7 +211,6 @@ void PoseEstimator::process_scene() {
   // sor.filter(*obj_filt);
 
   // measure dimension of object - highly recommended along Z axis!
-  PointT min_pt, max_pt;
   getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
   switch (scale_axis) {
   case 'x':
@@ -219,14 +229,22 @@ void PoseEstimator::process_scene() {
                       scale_axis, axis_size);
 }
 
-void PoseEstimator::process_object(float s) {
+void PoseEstimator::process_object() {
   // Assumes the object has it's Z axis pointing up!
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
+  // object flip
+  Eigen::Matrix3f R;
+  R = Eigen::AngleAxisf(object_flip_x * M_PI / 180.f, Eigen::Vector3f::UnitX())
+    * Eigen::AngleAxisf(object_flip_y * M_PI / 180.f, Eigen::Vector3f::UnitY())
+    * Eigen::AngleAxisf(object_flip_z * M_PI / 180.f, Eigen::Vector3f::UnitZ());
+  object_flip.block<3, 3>(0, 0) = R;
+  cout << "Object flipped by " << object_flip_x << " X, "
+       << object_flip_y << " Y " << object_flip_z << " Z." << endl;
+
   if (forced_object_scale < 0.f) {
-    if (!object_flipped) {
       // scale by size of object in scene
       PointT min_pt, max_pt;
       getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
@@ -244,11 +262,6 @@ void PoseEstimator::process_object(float s) {
       }
       object_scale = object_pose = object_azim = tformT::Identity();
       object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
-    } else {  // get scale from file produced by PE in non-flipped object
-      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = s;
-      cout << "Object is flipped 180 degrees about X axis" << endl;
-      object_flip(1, 1) = object_flip(2, 2) = -1;
-    }
   } else {
       object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
           forced_object_scale;
@@ -323,6 +336,8 @@ bool PoseEstimator::do_icp() {
   icp.setMaxCorrespondenceDistance(icp_max_corr_distance);
   icp.setMaximumIterations(icp_n_iters);
   icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
+  icp.setEuclideanFitnessEpsilon(1e-12);
+  icp.setTransformationEpsilon(1e-12);
   if (icp_estimate_scale) icp.setTransformationEstimation(te_svd_scale);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
