@@ -45,7 +45,6 @@ PCLViewer::PCLViewer(QWidget *parent) :
   widget->SetRenderWindow(viewer->getRenderWindow());
   viewer->setupInteractor(widget->GetInteractor(), widget->GetRenderWindow());
   widget->update();
-  init_viewers();
 
   // make signal-slot connections
   connect(ui->scene_leaf_size_line_edit, &QLineEdit::textEdited, this,
@@ -156,7 +155,8 @@ void PCLViewer::init_viewers() {
     cout << "Loaded scene of size " << scene_cloud->width << " x "
          << scene_cloud->height << endl;
   }
-  cloud_filename = root_dir + string("/object.ply");
+  cloud_filename = root_dir + string("/../../models/") + object_name +
+      string(".ply");
   sample_mesh<PointT>(cloud_filename, object_cloud);
   if (object_cloud->empty()) {
     PCL_ERROR("Could not load file %s\n", cloud_filename);
@@ -395,8 +395,17 @@ void PCLViewer::scene_estimate_plane_clicked(bool checked) {
     plane_estimated = true;
     cout << "Previous plane estimate used" << endl;
   }
-  scene_vis->addPlane(pe->get_scene_plane_coeffs(), pe->get_object_init_x(),
+  auto plane = pe->get_scene_plane_coeffs();
+  scene_vis->addPlane(plane, pe->get_object_init_x(),
                       pe->get_object_init_y(), pe->get_object_init_z());
+
+  // draw arrow in direction of plane normal
+  PointXYZ p0;
+  p0.x = p.x + 0.3 * plane->values[0];
+  p0.y = p.y + 0.3 * plane->values[1];
+  p0.z = p.z + 0.3 * plane->values[2];
+  scene_vis->addArrow(p0, p);
+
   cout << "Plane and box drawn" << endl;
 }
 
@@ -495,6 +504,18 @@ void PCLViewer::dir_select_clicked(bool checked) {
   }
   cout << "Root directory set to " << root_dir << endl;
 
+  // read object name
+  string filename = root_dir + string("/object_name.txt");
+  ifstream f(filename);
+  if (f.is_open()) {
+    f >> object_name;
+    f.close();
+  } else {
+    console::print_error("Could not open %s for reading", filename.c_str());
+    return;
+  }
+  cout << "Object name is " << object_name << endl;
+
   // refresh combo-box and populate with list of pcds in directory
   QComboBox *cb = ui->scene_select_combo_box;
   cb->clear();
@@ -513,7 +534,12 @@ void PCLViewer::dir_select_clicked(bool checked) {
   }
 
   // read init XYZ info from txt file
-  ifstream f(root_dir + string("/poses/tt_base.txt"));
+  filename = root_dir + string("/poses/tt_base.txt");
+  f.open(filename);
+  if (!f.is_open()) {
+    console::print_error("Could not open %s for reading\n", filename.c_str());
+    return;
+  }
   Eigen::Matrix4f T = Eigen::Matrix4f::Identity();
   float x;
   f >> x; T(0, 3) = x;
@@ -541,12 +567,15 @@ void PCLViewer::dir_select_clicked(bool checked) {
   // read parameters for flipping object
   f.open(root_dir + string("/object_flip.txt"));
   float object_flip_x(0), object_flip_y(0), object_flip_z(0);
+  float object_slide_x(0), object_slide_y(0), object_slide_z(0);
   if (!f.is_open())
       cout << "WARN: could not read flip parameters, setting to 0" << endl;
-  f >> object_flip_x >> object_flip_y >> object_flip_z;
-  pe->set_object_flip_x(object_flip_x);
-  pe->set_object_flip_y(object_flip_y);
-  pe->set_object_flip_z(object_flip_z);
+  f >> object_slide_x >> object_slide_y >> object_slide_z
+      >> object_flip_x >> object_flip_y >> object_flip_z;
+  // degrees
+  pe->set_object_flip_angles(object_flip_x, object_flip_y, object_flip_z);
+  // cm
+  pe->set_object_slide(object_slide_x, object_slide_y, object_slide_z);
 }
 
 void PCLViewer::scene_select_combo_box_activated(const QString &text) {

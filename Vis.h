@@ -63,6 +63,9 @@ class Vis {
   bool addPlane(const pcl::ModelCoefficientsConstPtr &coeffs, double x, double y,
                 double z);
 
+  bool addArrow(const pcl::PointXYZ &p1, const pcl::PointXYZ &p2,
+                std::vector<double> c = {1, 0, 0});
+
   pcl::visualization::PCLVisualizer::Ptr get_viewer() {return viewer;}
   bool removeAllPointClouds() {return viewer->removeAllPointClouds();}
   bool removePointCloud(std::string id) {return viewer->removePointCloud(id);}

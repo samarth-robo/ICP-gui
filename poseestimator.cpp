@@ -20,7 +20,6 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
-  object_flip_x(0.f), object_flip_y(0.f), object_flip_z(0.f),
   object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
@@ -123,6 +122,16 @@ bool PoseEstimator::estimate_plane_params() {
     console::print_error("No plane found in the scene.");
     return false;
   } else console::print_info("done.\n");
+
+  // flip the plane normal if needed
+  Eigen::Vector3f n(scene_plane_coeffs->values[0], scene_plane_coeffs->values[1],
+      scene_plane_coeffs->values[1]);
+  if (n.dot(tt_axis) < 0) {
+    scene_plane_coeffs->values[0] *= -1.f;
+    scene_plane_coeffs->values[1] *= -1.f;
+    scene_plane_coeffs->values[2] *= -1.f;
+    scene_plane_coeffs->values[3] *= -1.f;
+  }
 
   // plane pointlcoud and hull
   float a(object_init_x), b(object_init_y), c(object_init_z),
@@ -235,37 +244,46 @@ void PoseEstimator::process_object() {
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
+  tformT T = tformT::Identity();
+  T.block<3, 1>(0, 3) = object_slide;
+  transformPointCloud(*object_processed, *object_processed, T);
+  cout << "Object slid by " << object_slide[0] << ", " << object_slide[1]
+       << ", " << object_slide[2] << endl;
+
   // object flip
   Eigen::Matrix3f R;
-  R = Eigen::AngleAxisf(object_flip_x * M_PI / 180.f, Eigen::Vector3f::UnitX())
-    * Eigen::AngleAxisf(object_flip_y * M_PI / 180.f, Eigen::Vector3f::UnitY())
-    * Eigen::AngleAxisf(object_flip_z * M_PI / 180.f, Eigen::Vector3f::UnitZ());
+  R = Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX())
+    * Eigen::AngleAxisf(object_flip_angles[1], Eigen::Vector3f::UnitY())
+    * Eigen::AngleAxisf(object_flip_angles[2], Eigen::Vector3f::UnitZ());
   object_flip.block<3, 3>(0, 0) = R;
-  cout << "Object flipped by " << object_flip_x << " X, "
-       << object_flip_y << " Y " << object_flip_z << " Z." << endl;
+  cout << "Object flipped by " << object_flip_angles[0] << " X, "
+       << object_flip_angles[1] << " Y, " << object_flip_angles[2] << " Z."
+       << endl;
 
   if (forced_object_scale < 0.f) {
-      // scale by size of object in scene
-      PointT min_pt, max_pt;
-      getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
-      float scale = axis_size;
-      switch (scale_axis) {
-      case 'x':
-        scale /= fabs(max_pt.x - min_pt.x);
-        break;
-      case 'y':
-        scale /= fabs(max_pt.y - min_pt.y);
-        break;
-      case 'z':
-        scale /= fabs(max_pt.z - min_pt.z);
-        break;
-      }
-      object_scale = object_pose = object_azim = tformT::Identity();
-      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
+    PointCloudT::Ptr object_flipped = boost::make_shared<PointCloudT>();
+    transformPointCloud(*object_processed, *object_flipped, object_flip);
+    // scale by size of object in scene
+    PointT min_pt, max_pt;
+    getMinMax3D<PointT>(*object_flipped, min_pt, max_pt);
+    float scale = axis_size;
+    switch (scale_axis) {
+    case 'x':
+      scale /= fabs(max_pt.x - min_pt.x);
+      break;
+    case 'y':
+      scale /= fabs(max_pt.y - min_pt.y);
+      break;
+    case 'z':
+      scale /= fabs(max_pt.z - min_pt.z);
+      break;
+    }
+    object_scale = object_pose = object_azim = tformT::Identity();
+    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   } else {
-      object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
-          forced_object_scale;
-      cout << "Object scale forced" << endl;
+    object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
+        forced_object_scale;
+    cout << "Object scale forced" << endl;
   }
   cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }

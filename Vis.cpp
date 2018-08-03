@@ -213,6 +213,13 @@ template bool Vis::addCorrespondences<PointXYZRGB>(PointCloud<PointXYZRGB>::Cons
                                                    PointCloud<PointXYZRGB>::ConstPtr target,
                                                    vector<int> const &corrs, int skip);
 
+bool Vis::addArrow(const PointXYZ &p1, const PointXYZ &p2,
+                   std::vector<double> c) {
+  string id = get_next_id("arrow");
+  bool done = viewer->addArrow(p1, p2, c[0], c[1], c[2], false, id);
+  return done;
+}
+
 void Vis::show(bool block) {
   if(!shown) {
     viewer->createInteractor();

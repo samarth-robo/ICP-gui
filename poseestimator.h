@@ -38,9 +38,16 @@ public:
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
   void set_tt_pose(const tformT &T);
-  void set_object_flip_x(float s)    {object_flip_x = s;}
-  void set_object_flip_y(float s)    {object_flip_y = s;}
-  void set_object_flip_z(float s)    {object_flip_z = s;}
+  void set_object_flip_angles(float rx, float ry, float rz) {
+    object_flip_angles[0] = rx * M_PI / 180.f;
+    object_flip_angles[1] = ry * M_PI / 180.f;
+    object_flip_angles[2] = rz * M_PI / 180.f;
+  }
+  void set_object_slide(float tx, float ty, float tz) {
+    object_slide[0] = tx / 100.f;
+    object_slide[1] = ty / 100.f;
+    object_slide[2] = tz / 100.f;
+  }
 
   // getters
   float get_scene_leaf_size()    {return scene_leaf_size;}
@@ -108,7 +115,8 @@ private:
   float forced_object_scale;
   float height_adjust;  // adjustment to height of object
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
-  float object_flip_x, object_flip_y, object_flip_z;
+  Eigen::Vector3f object_flip_angles;  // angles for flipping object model
+  Eigen::Vector3f object_slide;  // object model translation
 };
 
 #endif // POSEESTIMATOR_H
