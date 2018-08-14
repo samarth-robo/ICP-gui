@@ -16,20 +16,20 @@ using namespace pcl;
 
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
-  scene_leaf_size(0.001f), object_leaf_size(0.001f), object_height(0.f),
+  scene_leaf_size(0.001f), object_leaf_size(0.001f),
   scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
   object_pose(PoseEstimator::tformT::Identity()),
-  icp_n_iters(2000), icp_outlier_rejection_thresh(0.005),
+  icp_n_iters(100), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
-  icp_estimate_scale(false),
+  icp_no_rotation(false),
   scale_axis('z'),
   object_azim(PoseEstimator::tformT::Identity()),
   height_adjust(0.000),
   object_scale(PoseEstimator::tformT::Identity()),
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
-  forced_object_scale(-1.f) {
+  forced_object_scale(1.f) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -186,8 +186,8 @@ void PoseEstimator::process_scene() {
 
   // segment object sticking out of the plane
   ExtractPolygonalPrismData<PointT> prism;
-  prism.setViewPoint(0, 0, 1);
   PointIndicesPtr idx = boost::make_shared<PointIndices>();
+  prism.setViewPoint(0, 0, 1);
   prism.setInputCloud(scene_aligned);
   prism.setInputPlanarHull(hull_aligned);
   ExtractIndices<PointT> extract;
@@ -195,13 +195,6 @@ void PoseEstimator::process_scene() {
   extract.setNegative(false);
 
   prism.setHeightLimits(0, scene_boxsize_z);
-  prism.segment(*idx);
-  extract.setIndices(idx);
-  extract.filter(*scene_processed);
-  PointT min_pt, max_pt;
-  getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
-  float scene_min_height = max_pt.z - min_pt.z - object_height;
-  prism.setHeightLimits(scene_min_height, scene_boxsize_z);
   prism.segment(*idx);
   extract.setIndices(idx);
   extract.filter(*scene_processed);
@@ -220,6 +213,7 @@ void PoseEstimator::process_scene() {
   // sor.filter(*obj_filt);
 
   // measure dimension of object - highly recommended along Z axis!
+  PointT min_pt, max_pt;
   getMinMax3D<PointT>(*scene_processed, min_pt, max_pt);
   switch (scale_axis) {
   case 'x':
@@ -342,8 +336,6 @@ void PoseEstimator::init_icp() {
 // do ICP
 bool PoseEstimator::do_icp() {
   IterativeClosestPoint<PointT, PointT> icp;
-  typedef registration::TransformationEstimationSVDScale<PointT, PointT> teSVDT;
-  teSVDT::Ptr te_svd_scale = boost::make_shared<teSVDT>();
   PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
   transformPointCloud(*object_processed, *obj_input,
                       object_pose*object_azim*object_flip*object_scale);
@@ -352,25 +344,25 @@ bool PoseEstimator::do_icp() {
 
   icp.setRANSACOutlierRejectionThreshold(icp_outlier_rejection_thresh);
   icp.setMaxCorrespondenceDistance(icp_max_corr_distance);
-  icp.setMaximumIterations(icp_n_iters);
+  icp.setMaximumIterations(1);
   icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
   icp.setEuclideanFitnessEpsilon(1e-12);
   icp.setTransformationEpsilon(1e-12);
-  if (icp_estimate_scale) icp.setTransformationEstimation(te_svd_scale);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
-  icp.align(*obj_aligned);
-  if (icp.hasConverged()) {
+  tformT guess = tformT::Identity();
+  for (int i=0; i<icp_n_iters; i++) {
+    icp.align(*obj_aligned, guess);
+    guess = icp.getFinalTransformation();
+    if (icp_no_rotation) {
+      guess.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
+    }
+  }
+  if (true) {
     cout << "ICP converged" << endl;
 
     // get final object pose
     object_pose = icp.getFinalTransformation() * object_pose;
-    tformT T = tformT::Identity();
-    T(0, 3) = object_init_x;
-    T(1, 3) = object_init_y;
-    T(2, 3) = object_init_z;
-    T *= get_tabletop_rot();
-    object_pose = T * object_pose;
     return true;
   } else {
     console::print_error("ICP did not converge.");
@@ -380,8 +372,12 @@ bool PoseEstimator::do_icp() {
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
                                     std::string scale_filename) {
-  tformT T = object_pose * object_azim * object_flip;
-  Eigen::Quaternionf q(T.block<3, 3>(0, 0));
+  tformT T = tformT::Identity();
+  T(0, 3) = object_init_x;
+  T(1, 3) = object_init_y;
+  T(2, 3) = object_init_z;
+  T *= get_tabletop_rot();
+  T = T * object_pose * object_azim * object_flip;
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
@@ -400,8 +396,6 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   f << T(2, 0) << " ";
   f << T(2, 1) << " ";
   f << T(2, 2) << endl;
-  // f << T(0, 3) << " " << T(1, 3) << " " << T(2, 3) << " " << q.w() << " "
-  //   << q.x() << " " << q.y() << " " << q.z() << endl;
   f.close();
 
   f.open(scale_filename);

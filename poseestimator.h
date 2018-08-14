@@ -20,7 +20,6 @@ public:
   void set_scene_boxsize_x(float s)  {scene_boxsize_x = s;}
   void set_scene_boxsize_y(float s)  {scene_boxsize_y = s;}
   void set_scene_boxsize_z(float s)  {scene_boxsize_z = s;}
-  void set_object_height(float s)    {object_height = s;}
   void set_object_init_x(float s)    {object_init_x = s;}
   void set_object_init_y(float s)    {object_init_y = s;}
   void set_object_init_z(float s)    {object_init_z = s;}
@@ -32,7 +31,7 @@ public:
   void set_icp_corr_dist(float s)    {icp_max_corr_distance = s;}
   void set_forced_object_scale(float s) {forced_object_scale = s;}
   void set_icp_use_recip_corr(bool s){icp_use_reciprocal_corr = s;}
-  void set_icp_estimate_scale(bool s){icp_estimate_scale = s;}
+  void set_icp_no_rotation(bool s)   {icp_no_rotation = s;}
   void set_height_adjust(float s)    {height_adjust = s;}
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
@@ -57,7 +56,6 @@ public:
   float get_scene_boxsize_z()    {return scene_boxsize_z;}
   pcl::PointXYZ get_scene_box_min_pt();
   pcl::PointXYZ get_scene_box_max_pt();
-  float get_object_height()      {return object_height;}
   float get_object_init_x()      {return object_init_x;}
   float get_object_init_y()      {return object_init_y;}
   float get_object_init_z()      {return object_init_z;}
@@ -70,7 +68,7 @@ public:
   float get_forced_object_scale(){return forced_object_scale;}
   float get_height_adjust()      {return height_adjust;}
   bool  get_icp_use_recip_corr() {return icp_use_reciprocal_corr;}
-  bool  get_icp_estimate_scale() {return icp_estimate_scale;}
+  bool  get_icp_no_rotation() {return icp_no_rotation;}
   char  get_scale_axis()         {return scale_axis;}
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
@@ -99,10 +97,10 @@ private:
   float scene_leaf_size, object_leaf_size;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;
   float object_init_x, object_init_y, object_init_z, object_init_azim,
-  object_init_dx, object_init_dy, object_init_dz, object_height;
+  object_init_dx, object_init_dy, object_init_dz;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
-  bool icp_use_reciprocal_corr, icp_estimate_scale;
+  bool icp_use_reciprocal_corr, icp_no_rotation;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;

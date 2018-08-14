@@ -2,6 +2,7 @@
 #include "ui_pclviewer.h"
 #include "mesh_sample.h"
 #include <iostream>
+#include <cstdlib>
 
 #include <pcl/io/pcd_io.h>
 #include <QLineEdit>
@@ -51,8 +52,6 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::scene_leaf_size_changed);
   connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_leaf_size_changed);
-  connect(ui->object_height_line_edit, &QLineEdit::textEdited, this,
-          &PCLViewer::object_height_changed);
   connect(ui->object_x_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_init_x_changed);
   connect(ui->object_y_line_edit, &QLineEdit::textEdited, this,
@@ -79,8 +78,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::height_adjust_changed);
   connect(ui->icp_recip_corr_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_recip_corr_clicked);
-  connect(ui->icp_estimate_scale_checkbox, &QCheckBox::stateChanged, this,
-          &PCLViewer::icp_estimate_scale_clicked);
+  connect(ui->icp_no_rotation_checkbox, &QCheckBox::stateChanged, this,
+          &PCLViewer::icp_no_rotation_clicked);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_process_clicked);
   connect(ui->scene_estimate_plane_button, &QAbstractButton::clicked, this,
@@ -109,8 +108,6 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui-> scene_leaf_size_line_edit->setText(s);
   s.setNum(pe->get_scene_boxsize_x());
   ui->scene_boxsize_line_edit->setText(s);
-  s.setNum(pe->get_object_height());
-  ui->object_height_line_edit->setText(s);
   s.setNum(pe->get_object_init_x());
   ui->object_x_line_edit->setText(s);
   s.setNum(pe->get_object_init_y());
@@ -134,7 +131,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   s.setNum(pe->get_icp_corr_dist());
   ui->icp_corr_dist_line_edit->setText(s);
   ui->icp_recip_corr_checkbox->setChecked(pe->get_icp_use_recip_corr());
-  ui->icp_estimate_scale_checkbox->setChecked(pe->get_icp_estimate_scale());
+  ui->icp_no_rotation_checkbox->setChecked(pe->get_icp_no_rotation());
 }
 
 PCLViewer::~PCLViewer() {
@@ -143,9 +140,9 @@ PCLViewer::~PCLViewer() {
 
 void PCLViewer::init_viewers() {
   // read the point clouds
-  string cloud_filename = root_dir + string("/pointclouds/") + scene_filename;
-  if (io::loadPCDFile<PointT>(cloud_filename, *scene_cloud) == -1) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename);
+  bfs::path cloud_filename = bfs::path(root_dir) / "pointclouds" / scene_filename;
+  if (io::loadPCDFile<PointT>(cloud_filename.string(), *scene_cloud) == -1) {
+    PCL_ERROR("Could not load file %s\n", cloud_filename.string());
     return;
   } else {
     scene_vis->removeAllPointClouds();
@@ -155,11 +152,11 @@ void PCLViewer::init_viewers() {
     cout << "Loaded scene of size " << scene_cloud->width << " x "
          << scene_cloud->height << endl;
   }
-  cloud_filename = root_dir + string("/../../models/") + object_name +
-      string(".ply");
-  sample_mesh<PointT>(cloud_filename, object_cloud);
+  cloud_filename = bfs::path(std::getenv("HOME")) / "deepgrasp_data" / "models"
+      / (object_name + string(".ply"));
+  sample_mesh<PointT>(cloud_filename.string(), object_cloud);
   if (object_cloud->empty()) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename);
+    PCL_ERROR("Could not load file %s\n", cloud_filename.string());
     return;
   } else {
     object_vis->addPointCloud<PointT>(object_cloud, {1, 0, 0}, "object");
@@ -189,18 +186,6 @@ void PCLViewer::object_leaf_size_changed(const QString &t) {
     cout << "Set object leaf size to " << s << endl;
   } else {
     cout << "ERROR: wrong object leaf size " << t.toStdString() << endl;
-  }
-}
-
-void PCLViewer::object_height_changed(const QString &t) {
-  bool ok = false;
-  float s = t.toFloat(&ok) / 100;
-  if (ok) {
-    pe->set_object_height(s);
-    scene_processed = false;
-    cout << "Set object height to " << s << endl;
-  } else {
-    cout << "ERROR: wrong height above table " << t.toStdString() << endl;
   }
 }
 
@@ -360,15 +345,15 @@ void PCLViewer::icp_recip_corr_clicked(int state) {
   }
 }
 
-void PCLViewer::icp_estimate_scale_clicked(int state) {
+void PCLViewer::icp_no_rotation_clicked(int state) {
   switch (state) {
   case Qt::Unchecked:
-    pe->set_icp_estimate_scale(false);
-    cout << "ICP will not estimate scale" << endl;
+    pe->set_icp_no_rotation(false);
+    cout << "ICP will estimate rotation" << endl;
     break;
   case Qt::Checked:
-    pe->set_icp_estimate_scale(true);
-    cout << "ICP will estimate scale" << endl;
+    pe->set_icp_no_rotation(true);
+    cout << "ICP will not estimate rotation" << endl;
     break;
   default:
     cout << "Wrong state of checkbox!" << endl;
@@ -462,7 +447,7 @@ void PCLViewer::icp_process_clicked(bool checked) {
     if (object_processed) {
       if (icp_initialized) {
         if (pe->do_icp()) {
-          refresh_icp_viewer(true);
+          refresh_icp_viewer();
           object_processed = false;
         }
       } else cout << "WARN: Initialize ICP first!" << endl;

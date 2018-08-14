@@ -25,7 +25,6 @@ public slots:
     void scene_select_combo_box_activated(const QString &text);
     void scene_leaf_size_changed(const QString &t);
     void object_leaf_size_changed(const QString &t);
-    void object_height_changed(const QString &t);
     void object_init_x_changed(const QString &t);
     void object_init_y_changed(const QString &t);
     void object_init_z_changed(const QString &t);
@@ -39,7 +38,7 @@ public slots:
     void forced_object_scale_changed(const QString &t);
     void height_adjust_changed(const QString &t);
     void icp_recip_corr_clicked(int state);
-    void icp_estimate_scale_clicked(int state);
+    void icp_no_rotation_clicked(int state);
     void scene_estimate_plane_clicked(bool checked);
     void scene_save_plane_clicked(bool checked);
     void scene_process_clicked(bool checked);
