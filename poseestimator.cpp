@@ -29,7 +29,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   height_adjust(0.000),
   object_scale(PoseEstimator::tformT::Identity()),
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
-  forced_object_scale(1.f) {
+  forced_object_scale(1.f),
+  T_f_o(PoseEstimator::tformT::Identity()) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -104,6 +105,31 @@ void PoseEstimator::crop_subsample_scene() {
   box.filter(*scene_cropped_subsampled);
 }
 
+bool PoseEstimator::set_T_b_f(std::string filename) {
+  ifstream f(filename);
+  if (!f.is_open()) {
+    cerr << "Could not open " << filename << " for reading" << endl;
+    return false;
+  }
+
+  T_b_f = tformT::Identity();
+  f >> T_b_f(0, 3);
+  f >> T_b_f(1, 3);
+  f >> T_b_f(2, 3);
+  f >> T_b_f(0, 0);
+  f >> T_b_f(0, 1);
+  f >> T_b_f(0, 2);
+  f >> T_b_f(1, 0);
+  f >> T_b_f(1, 1);
+  f >> T_b_f(1, 2);
+  f >> T_b_f(2, 0);
+  f >> T_b_f(2, 1);
+  f >> T_b_f(2, 2);
+  f.close();
+
+  return true;
+}
+
 bool PoseEstimator::estimate_plane_params() {
   // estimate the plane
   console::print_info("Estimating plane...");
@@ -159,6 +185,12 @@ bool PoseEstimator::estimate_plane_params() {
   T(1, 3) = p.y;
   T(2, 3) = p.z;
   transformPointCloud(*grid, *grid, T);
+
+  // populate pose of turntable base frame
+  T(0, 3) = object_init_x;
+  T(1, 3) = object_init_y;
+  T(2, 3) = object_init_z;
+  T_c_b = invert_pose(T);
 
   // make convex hull from turntable points
   ConvexHull<PointT> hull;
@@ -372,30 +404,32 @@ bool PoseEstimator::do_icp() {
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
                                     std::string scale_filename) {
-  tformT T = tformT::Identity();
-  T(0, 3) = object_init_x;
-  T(1, 3) = object_init_y;
-  T(2, 3) = object_init_z;
-  T *= get_tabletop_rot();
-  T = T * object_pose * object_azim * object_flip;
+  tformT T_c_o = tformT::Identity();
+  T_c_o(0, 3) = object_init_x;
+  T_c_o(1, 3) = object_init_y;
+  T_c_o(2, 3) = object_init_z;
+  T_c_o *= get_tabletop_rot();
+  T_c_o *= object_pose * object_azim * object_flip;
+
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o;
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
     cout << "Could not open " << pose_filename << " for appending" << endl;
     return false;
   }
-  f << T(0, 3) << " ";
-  f << T(1, 3) << " ";
-  f << T(2, 3) << " ";
-  f << T(0, 0) << " ";
-  f << T(0, 1) << " ";
-  f << T(0, 2) << " ";
-  f << T(1, 0) << " ";
-  f << T(1, 1) << " ";
-  f << T(1, 2) << " ";
-  f << T(2, 0) << " ";
-  f << T(2, 1) << " ";
-  f << T(2, 2) << endl;
+  f << T_c_o(0, 3) << " ";
+  f << T_c_o(1, 3) << " ";
+  f << T_c_o(2, 3) << " ";
+  f << T_c_o(0, 0) << " ";
+  f << T_c_o(0, 1) << " ";
+  f << T_c_o(0, 2) << " ";
+  f << T_c_o(1, 0) << " ";
+  f << T_c_o(1, 1) << " ";
+  f << T_c_o(1, 2) << " ";
+  f << T_c_o(2, 0) << " ";
+  f << T_c_o(2, 1) << " ";
+  f << T_c_o(2, 2) << endl;
   f.close();
 
   f.open(scale_filename);

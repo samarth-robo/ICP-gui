@@ -164,6 +164,12 @@ void PCLViewer::init_viewers() {
     cout << "Loaded object of size " << object_cloud->width << " x "
          << object_cloud->height << endl;
   }
+
+  // read turntable state
+  string scene_id = scene_filename.substr(0, scene_filename.find_first_of('.'));
+  bfs::path T_b_f_filename = bfs::path(root_dir) / "poses" /
+      (string("tt_frame_") + scene_id + ".txt");
+  pe->set_T_b_f(T_b_f_filename.string());
 }
 
 void PCLViewer::scene_leaf_size_changed(const QString &t) {

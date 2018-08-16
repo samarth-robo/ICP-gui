@@ -87,6 +87,7 @@ public:
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
   bool write_tt_file(std::string tt_base_filename);
   bool estimate_plane_params();
+  bool set_T_b_f(std::string filename);
 
 private:
   void crop_subsample_scene();
@@ -115,6 +116,7 @@ private:
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
   Eigen::Vector3f object_slide;  // object model translation
+  tformT T_b_f, T_c_b, T_f_o;  // needed for pose suggestions
 };
 
 #endif // POSEESTIMATOR_H
