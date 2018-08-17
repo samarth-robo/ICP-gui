@@ -424,6 +424,15 @@ void PCLViewer::object_process_clicked(bool checked) {
   object_vis->removeAllPointClouds();
   object_vis->addPointCloud<PointT>(pe->get_processed_object(), {1, 0, 0},
                                     "object");
+  pe->set_object_init_azim(0);
+  pe->set_object_init_dx(0);
+  pe->set_object_init_dy(0);
+  pe->set_object_init_dz(0);
+  ui->object_init_azimuth_line_edit->setText("0");
+  ui->object_dx_line_edit->setText("0");
+  ui->object_dy_line_edit->setText("0");
+  ui->object_dz_line_edit->setText("0");
+  icp_init_clicked(false);
 }
 
 void PCLViewer::refresh_icp_viewer(bool whole_scene) {

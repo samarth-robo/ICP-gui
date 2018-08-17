@@ -190,7 +190,7 @@ bool PoseEstimator::estimate_plane_params() {
   T(0, 3) = object_init_x;
   T(1, 3) = object_init_y;
   T(2, 3) = object_init_z;
-  T_c_b = invert_pose(T);
+  T_c_b = T;
 
   // make convex hull from turntable points
   ConvexHull<PointT> hull;
@@ -359,10 +359,10 @@ void PoseEstimator::init_icp() {
   object_azim(0, 1) = -s;
   object_azim(1, 0) = s;
   object_azim(1, 1) = c;
-  object_pose = tformT::Identity();
-  object_pose(0, 3) = object_init_dx;
-  object_pose(1, 3) = object_init_dy;
-  object_pose(2, 3) = object_init_dz;
+  object_pose = T_b_f * T_f_o;
+  object_pose(0, 3) += object_init_dx;
+  object_pose(1, 3) += object_init_dy;
+  object_pose(2, 3) += object_init_dz;
 }
 
 // do ICP
@@ -411,7 +411,8 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o *= get_tabletop_rot();
   T_c_o *= object_pose * object_azim * object_flip;
 
-  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o;
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
+      invert_pose(object_flip) * invert_pose(object_azim);
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
