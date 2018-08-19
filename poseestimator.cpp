@@ -412,7 +412,7 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o *= object_pose * object_azim * object_flip;
 
   T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
-      invert_pose(object_flip) * invert_pose(object_azim);
+      invert_pose(object_flip);
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {

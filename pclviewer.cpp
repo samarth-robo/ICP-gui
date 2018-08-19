@@ -463,7 +463,7 @@ void PCLViewer::icp_process_clicked(bool checked) {
       if (icp_initialized) {
         if (pe->do_icp()) {
           refresh_icp_viewer();
-          object_processed = false;
+          // object_processed = false;
         }
       } else cout << "WARN: Initialize ICP first!" << endl;
     } else cout << "WARN: process object first!" << endl;
