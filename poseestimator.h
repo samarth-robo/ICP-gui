@@ -3,6 +3,7 @@
 
 #include "pcl_includes.h"
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/registration/icp.h>
 
 class PoseEstimator
 {
@@ -117,6 +118,16 @@ private:
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
   Eigen::Vector3f object_slide;  // object model translation
   tformT T_b_f, T_c_b, T_f_o;  // needed for pose suggestions
+};
+
+
+template <typename PointSource, typename PointTarget, typename Scalar = float>
+class IterativeClosestPoint_Exposed :
+    public pcl::IterativeClosestPoint<PointSource, PointTarget, Scalar> {
+  public:
+    pcl::CorrespondencesPtr getCorrespondencesPtr() {
+      return this->correspondences_;
+    }
 };
 
 #endif // POSEESTIMATOR_H

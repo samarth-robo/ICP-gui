@@ -7,8 +7,9 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/surface/convex_hull.h>
-#include <pcl/registration/icp.h>
 #include <pcl/registration/transformation_estimation_svd_scale.h>
+#include <pcl/registration/registration.h>
+#include <pcl/segmentation/region_growing_rgb.h>
 
 #include <fstream>
 
@@ -17,11 +18,11 @@ using namespace pcl;
 PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
   scene_leaf_size(0.001f), object_leaf_size(0.001f),
-  scene_boxsize_x(0.2f), scene_boxsize_y(0.25f), scene_boxsize_z(0.25f),
+  scene_boxsize_x(0.3f), scene_boxsize_y(0.3f), scene_boxsize_z(0.3f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
   object_pose(PoseEstimator::tformT::Identity()),
-  icp_n_iters(100), icp_outlier_rejection_thresh(0.005),
+  icp_n_iters(40), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
   icp_no_rotation(false),
   scale_axis('z'),
@@ -30,7 +31,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_scale(PoseEstimator::tformT::Identity()),
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
   forced_object_scale(1.f),
-  T_f_o(PoseEstimator::tformT::Identity()) {
+  T_f_o(PoseEstimator::tformT::Identity()),
+  white_thresh(150.f) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -169,7 +171,7 @@ bool PoseEstimator::estimate_plane_params() {
   // make grid of points
   PointCloudT::Ptr grid = boost::make_shared<PointCloudT>();
   int N = 100;  // size of grid
-  d = 0.005;  // distance between grid points (m)
+  d = 0.05;  // distance between grid points (m)
   for (int x = 0; x < N; x++) {
     for (int y = 0; y < N; y++) {
       PointT g(UINT8_MAX, UINT8_MAX, UINT8_MAX);
@@ -202,6 +204,21 @@ bool PoseEstimator::estimate_plane_params() {
   } else return true;
 }
 
+
+int get_top_point(PointCloud<PointT>::Ptr &cloud) {
+  int index = -1;
+  float max_z = -FLT_MAX;
+  for (int i=0; i < cloud->size(); i++) {
+    float z = cloud->at(i).z;
+    if (z > max_z) {
+      max_z = z;
+      index = i;
+    }
+  }
+  return index;
+}
+
+
 void PoseEstimator::process_scene() {
   // assume cropping, subsampling and plane estimation is done
 
@@ -228,6 +245,17 @@ void PoseEstimator::process_scene() {
 
   prism.setHeightLimits(0, scene_boxsize_z);
   prism.segment(*idx);
+  extract.setIndices(idx);
+  extract.filter(*scene_processed);
+
+  // segment out the white object
+  idx->indices.clear();
+  for (int i=0; i<scene_processed->size(); i++) {
+    const auto &p = scene_processed->at(i);
+    float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
+    if (gray > white_thresh) idx->indices.push_back(i);
+  }
+  extract.setInputCloud(scene_processed);
   extract.setIndices(idx);
   extract.filter(*scene_processed);
 
@@ -367,12 +395,12 @@ void PoseEstimator::init_icp() {
 
 // do ICP
 bool PoseEstimator::do_icp() {
-  IterativeClosestPoint<PointT, PointT> icp;
+  IterativeClosestPoint_Exposed<PointT, PointT> icp;
   PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
   transformPointCloud(*object_processed, *obj_input,
                       object_pose*object_azim*object_flip*object_scale);
-  icp.setInputSource(obj_input);
-  icp.setInputTarget(scene_processed);
+  icp.setInputSource(scene_processed);
+  icp.setInputTarget(obj_input);
 
   icp.setRANSACOutlierRejectionThreshold(icp_outlier_rejection_thresh);
   icp.setMaxCorrespondenceDistance(icp_max_corr_distance);
@@ -393,8 +421,23 @@ bool PoseEstimator::do_icp() {
   if (true) {
     cout << "ICP converged" << endl;
 
+    /*
+     * Energy calculations - do not help to decide the right initialization
+     * for ICP, unfortunately
+     */
+    auto tree = icp.getSearchMethodTarget();
+    double dist(0.0);
+    std::vector<int> idx(1);
+    std::vector<float> dists(1);
+    for (const auto &p: scene_processed->points) {
+      tree->nearestKSearch(p, 1, idx, dists);
+      dist += dists[0];
+    }
+    dist /= scene_processed->points.size();
+    cout << "Energy = " << dist << endl;
+
     // get final object pose
-    object_pose = icp.getFinalTransformation() * object_pose;
+    object_pose = invert_pose(icp.getFinalTransformation()) * object_pose;
     return true;
   } else {
     console::print_error("ICP did not converge.");
