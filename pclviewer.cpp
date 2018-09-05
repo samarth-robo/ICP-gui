@@ -461,7 +461,7 @@ void PCLViewer::icp_process_clicked(bool checked) {
   if (scene_processed) {
     if (object_processed) {
       if (icp_initialized) {
-        if (pe->do_icp()) {
+        if (pe->do_auto_icp() > 0) {
           refresh_icp_viewer();
           // object_processed = false;
         }

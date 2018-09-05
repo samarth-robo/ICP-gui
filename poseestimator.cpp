@@ -23,7 +23,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_azim(0.f),
   object_pose(PoseEstimator::tformT::Identity()),
   icp_n_iters(40), icp_outlier_rejection_thresh(0.005),
-  icp_max_corr_distance(0.005), icp_use_reciprocal_corr(false),
+  icp_max_corr_distance(0.05), icp_use_reciprocal_corr(false),
   icp_no_rotation(false),
   scale_axis('z'),
   object_azim(PoseEstimator::tformT::Identity()),
@@ -394,7 +394,7 @@ void PoseEstimator::init_icp() {
 }
 
 // do ICP
-bool PoseEstimator::do_icp() {
+float PoseEstimator::do_icp() {
   IterativeClosestPoint_Exposed<PointT, PointT> icp;
   PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
   transformPointCloud(*object_processed, *obj_input,
@@ -404,29 +404,19 @@ bool PoseEstimator::do_icp() {
 
   icp.setRANSACOutlierRejectionThreshold(icp_outlier_rejection_thresh);
   icp.setMaxCorrespondenceDistance(icp_max_corr_distance);
-  icp.setMaximumIterations(1);
+  icp.setMaximumIterations(icp_n_iters);
   icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
   icp.setEuclideanFitnessEpsilon(1e-12);
   icp.setTransformationEpsilon(1e-12);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
+  icp.align(*obj_aligned);
   tformT guess = tformT::Identity();
-  for (int i=0; i<icp_n_iters; i++) {
-    icp.align(*obj_aligned, guess);
-    guess = icp.getFinalTransformation();
-    if (icp_no_rotation) {
-      guess.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
-    }
-  }
   if (true) {
     cout << "ICP converged" << endl;
 
-    /*
-     * Energy calculations - do not help to decide the right initialization
-     * for ICP, unfortunately
-     */
     auto tree = icp.getSearchMethodTarget();
-    double dist(0.0);
+    float dist(0.f);
     std::vector<int> idx(1);
     std::vector<float> dists(1);
     for (const auto &p: scene_processed->points) {
@@ -437,12 +427,60 @@ bool PoseEstimator::do_icp() {
     cout << "Energy = " << dist << endl;
 
     // get final object pose
-    object_pose = invert_pose(icp.getFinalTransformation()) * object_pose;
-    return true;
+    tformT T = icp.getFinalTransformation();
+    if (icp_no_rotation) {
+      T.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
+    }
+    object_pose = invert_pose(T) * object_pose;
+    return dist;
   } else {
     console::print_error("ICP did not converge.");
-    return false;
+    return -1.f;
   }
+}
+
+float PoseEstimator::do_auto_icp() {
+  float min_azim, min_x, min_y, min_z, min_r(FLT_MAX);
+  tformT minT;
+  for (float azim=0; azim<360.f; azim+=30.f) {
+    object_init_azim = azim;
+    for (float x=-0.f; x<=0.f; x+=1.f) {
+      object_init_dx = x;
+      for (float y=-0.f; y<=0.f; y+=1.f) {
+        object_init_dy = y;
+        for (float z=-0.f; z<=0.f; z+=1.f) {
+          object_init_dz = z;
+          init_icp();
+          float r = do_icp();
+          cout << "Azim = " << azim << ", x = " << x << ", y = " << y
+               << ", z = " << z << ", residual = " << r << endl;
+          if (r < min_r) {
+            min_r = r;
+            min_azim = azim;
+            min_x = x;
+            min_y = y;
+            min_z = z;
+            minT = object_pose;
+            cout << "Minimum so far" << endl;
+          }
+        }
+      }
+    }
+  }
+
+  object_init_dx = min_x;
+  object_init_dy = min_y;
+  object_init_dz = min_z;
+  object_pose = minT;
+  object_init_azim = min_azim;
+  object_azim = tformT::Identity();
+  float s = sin(object_init_azim * float(M_PI)/180),
+      c = cos(object_init_azim * float(M_PI)/180);
+  object_azim(0, 0) = c;
+  object_azim(0, 1) = -s;
+  object_azim(1, 0) = s;
+  object_azim(1, 1) = c;
+  return min_r;
 }
 
 bool PoseEstimator::write_pose_file(std::string pose_filename,
