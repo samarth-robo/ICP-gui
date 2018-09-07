@@ -32,3 +32,12 @@ set(project_SOURCES
 add_executable(${PROJECT_NAME} ${project_SOURCES})
 target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
 qt5_use_modules(${PROJECT_NAME} Widgets)
+
+add_executable(grasp_processor
+    grasp_processor_main.cpp
+    grasp_processor.cpp
+    grasp_processor.h
+    poseestimator.cpp
+    poseestimator.h
+    mesh_sample.cpp)
+target_link_libraries(grasp_processor ${PCL_LIBRARIES})

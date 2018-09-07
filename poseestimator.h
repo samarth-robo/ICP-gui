@@ -38,15 +38,11 @@ public:
   void set_scene(PointCloudT::Ptr const &p);
   void set_object(PointCloudT::Ptr const &p);
   void set_tt_pose(const tformT &T);
-  void set_object_flip_angles(float rx, float ry, float rz) {
-    object_flip_angles[0] = rx * M_PI / 180.f;
-    object_flip_angles[1] = ry * M_PI / 180.f;
-    object_flip_angles[2] = rz * M_PI / 180.f;
-  }
+  void set_object_flip_angles(float rx, float ry, float rz);
   void set_object_slide(float tx, float ty, float tz) {
-    object_slide[0] = tx / 100.f;
-    object_slide[1] = ty / 100.f;
-    object_slide[2] = tz / 100.f;
+    object_slide(0, 3) = tx / 100.f;
+    object_slide(1, 3) = ty / 100.f;
+    object_slide(2, 3) = tz / 100.f;
   }
 
   // getters
@@ -78,7 +74,7 @@ public:
   {return scene_cropped_subsampled;}
   pcl::ModelCoefficientsConstPtr get_scene_plane_coeffs()
   {return scene_plane_coeffs;}
-  tformT get_object_pose() {return object_pose;}
+  tformT get_object_pose();
 
   // other functions
   void process_scene();
@@ -110,15 +106,14 @@ private:
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_plane_hull_points;
-  tformT object_pose, object_azim, object_scale, object_flip;
+  tformT object_adj, object_scale, object_flip, object_slide;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
   float forced_object_scale;
   float height_adjust;  // adjustment to height of object
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
-  Eigen::Vector3f object_slide;  // object model translation
-  tformT T_b_f, T_c_b, T_f_o;  // needed for pose suggestions
+  tformT T_b_f, T_c_b, T_f_o, T_icp;  // needed for pose suggestions
   float white_thresh;  // color threshold for white object segmentation
 };
 

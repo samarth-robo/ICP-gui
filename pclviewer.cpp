@@ -142,7 +142,7 @@ void PCLViewer::init_viewers() {
   // read the point clouds
   bfs::path cloud_filename = bfs::path(root_dir) / "pointclouds" / scene_filename;
   if (io::loadPCDFile<PointT>(cloud_filename.string(), *scene_cloud) == -1) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename.string());
+    PCL_ERROR("Could not load file %s\n", cloud_filename.string().c_str());
     return;
   } else {
     scene_vis->removeAllPointClouds();
@@ -156,7 +156,7 @@ void PCLViewer::init_viewers() {
       / (object_name + string(".ply"));
   sample_mesh<PointT>(cloud_filename.string(), object_cloud);
   if (object_cloud->empty()) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename.string());
+    PCL_ERROR("Could not load file %s\n", cloud_filename.string().c_str());
     return;
   } else {
     object_vis->addPointCloud<PointT>(object_cloud, {1, 0, 0}, "object");

@@ -21,17 +21,19 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.3f), scene_boxsize_y(0.3f), scene_boxsize_z(0.3f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
-  object_pose(PoseEstimator::tformT::Identity()),
-  icp_n_iters(40), icp_outlier_rejection_thresh(0.005),
-  icp_max_corr_distance(0.05), icp_use_reciprocal_corr(false),
+  icp_n_iters(20), icp_outlier_rejection_thresh(0.005),
+  icp_max_corr_distance(0.02), icp_use_reciprocal_corr(false),
   icp_no_rotation(false),
   scale_axis('z'),
-  object_azim(PoseEstimator::tformT::Identity()),
+  object_adj(PoseEstimator::tformT::Identity()),
   height_adjust(0.000),
   object_scale(PoseEstimator::tformT::Identity()),
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
   forced_object_scale(1.f),
   T_f_o(PoseEstimator::tformT::Identity()),
+  T_icp(PoseEstimator::tformT::Identity()),
+  object_slide(PoseEstimator::tformT::Identity()),
+  object_flip(PoseEstimator::tformT::Identity()),
   white_thresh(150.f) {
   if (scene_) {
     scene = scene_;
@@ -60,10 +62,8 @@ void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
 void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object = p;
   object_vox.setInputCloud(object);
-  object_pose = tformT::Identity();
-  object_azim = tformT::Identity();
+  object_adj = tformT::Identity();
   object_scale = tformT::Identity();
-  object_flip = tformT::Identity();
 }
 
 void PoseEstimator::set_tt_pose(const tformT &T) {
@@ -266,11 +266,10 @@ void PoseEstimator::process_scene() {
 
   // remove noise
   // StatisticalOutlierRemoval<PointT> sor;
-  // sor.setInputCloud(obj);
+  // sor.setInputCloud(scene_processed);
   // sor.setMeanK(50);
   // sor.setStddevMulThresh(1.0);
-  // PointCloudT::Ptr obj_filt = boost::make_shared<PointCloudT>();
-  // sor.filter(*obj_filt);
+  // sor.filter(*scene_processed);
 
   // measure dimension of object - highly recommended along Z axis!
   PointT min_pt, max_pt;
@@ -292,24 +291,25 @@ void PoseEstimator::process_scene() {
                       scale_axis, axis_size);
 }
 
+void PoseEstimator::set_object_flip_angles(float rx, float ry, float rz) {
+  object_flip_angles[0] = rx * M_PI / 180.f;
+  object_flip_angles[1] = ry * M_PI / 180.f;
+  object_flip_angles[2] = rz * M_PI / 180.f;
+  Eigen::Matrix3f R;
+  R = Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX())
+    * Eigen::AngleAxisf(object_flip_angles[1], Eigen::Vector3f::UnitY())
+    * Eigen::AngleAxisf(object_flip_angles[2], Eigen::Vector3f::UnitZ());
+  object_flip.block<3, 3>(0, 0) = R;
+}
+
 void PoseEstimator::process_object() {
   // Assumes the object has it's Z axis pointing up!
   // subsample
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
-  tformT T = tformT::Identity();
-  T.block<3, 1>(0, 3) = object_slide;
-  transformPointCloud(*object_processed, *object_processed, T);
-  cout << "Object slid by " << object_slide[0] << ", " << object_slide[1]
-       << ", " << object_slide[2] << endl;
-
-  // object flip
-  Eigen::Matrix3f R;
-  R = Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX())
-    * Eigen::AngleAxisf(object_flip_angles[1], Eigen::Vector3f::UnitY())
-    * Eigen::AngleAxisf(object_flip_angles[2], Eigen::Vector3f::UnitZ());
-  object_flip.block<3, 3>(0, 0) = R;
+  cout << "Object slid by " << object_slide(0, 3) << ", " << object_slide(1, 3)
+       << ", " << object_slide(2, 3) << endl;
   cout << "Object flipped by " << object_flip_angles[0] << " X, "
        << object_flip_angles[1] << " Y, " << object_flip_angles[2] << " Z."
        << endl;
@@ -332,7 +332,7 @@ void PoseEstimator::process_object() {
       scale /= fabs(max_pt.z - min_pt.z);
       break;
     }
-    object_scale = object_pose = object_azim = tformT::Identity();
+    object_scale = object_adj = tformT::Identity();
     object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   } else {
     object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
@@ -368,11 +368,20 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
   return out;
 }
 
-PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
-  PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
+PoseEstimator::tformT PoseEstimator::get_object_pose() {
   tformT Tf = tformT::Identity();
   Tf(2, 3) = -height_adjust;
-  tformT T = object_pose * Tf * object_azim * object_flip * object_scale;
+  //tformT T = object_pose * Tf * object_azim * object_flip * object_scale;
+  tformT T = T_icp * T_b_f * T_f_o * Tf * object_slide * object_adj *
+      object_flip;
+  // T = object_flip * object_adj * object_slide;
+  return T;
+}
+
+PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
+  PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
+  tformT T = get_object_pose();
+  T *= object_scale;
   transformPointCloud(*object_processed, *out, T);
   return out;
 }
@@ -382,23 +391,23 @@ void PoseEstimator::init_icp() {
   // object initial azimuth angle
   float s = sin(object_init_azim * float(M_PI)/180),
       c = cos(object_init_azim * float(M_PI)/180);
-  object_azim = tformT::Identity();
-  object_azim(0, 0) = c;
-  object_azim(0, 1) = -s;
-  object_azim(1, 0) = s;
-  object_azim(1, 1) = c;
-  object_pose = T_b_f * T_f_o;
-  object_pose(0, 3) += object_init_dx;
-  object_pose(1, 3) += object_init_dy;
-  object_pose(2, 3) += object_init_dz;
+  object_adj = tformT::Identity();
+  object_adj(0, 0) = c;
+  object_adj(0, 1) = -s;
+  object_adj(1, 0) = s;
+  object_adj(1, 1) = c;
+  object_adj(0, 3) = object_init_dx;
+  object_adj(1, 3) = object_init_dy;
+  object_adj(2, 3) = object_init_dz;
+  T_icp = tformT::Identity();
 }
 
 // do ICP
 float PoseEstimator::do_icp() {
   IterativeClosestPoint_Exposed<PointT, PointT> icp;
-  PointCloudT::Ptr obj_input = boost::make_shared<PointCloudT>();
-  transformPointCloud(*object_processed, *obj_input,
-                      object_pose*object_azim*object_flip*object_scale);
+  PointCloudT::ConstPtr obj_input = get_processed_object();
+  // transformPointCloud(*object_processed, *obj_input,
+  //                     object_pose*object_slide*object_adj*object_flip*object_scale);
   icp.setInputSource(scene_processed);
   icp.setInputTarget(obj_input);
 
@@ -413,25 +422,26 @@ float PoseEstimator::do_icp() {
   icp.align(*obj_aligned);
   tformT guess = tformT::Identity();
   if (true) {
-    cout << "ICP converged" << endl;
+    // cout << "ICP converged" << endl;
 
     auto tree = icp.getSearchMethodTarget();
     float dist(0.f);
     std::vector<int> idx(1);
     std::vector<float> dists(1);
-    for (const auto &p: scene_processed->points) {
+    for (const auto &p: obj_aligned->points) {
       tree->nearestKSearch(p, 1, idx, dists);
       dist += dists[0];
     }
     dist /= scene_processed->points.size();
-    cout << "Energy = " << dist << endl;
+    // cout << "Energy = " << dist << endl;
 
     // get final object pose
     tformT T = icp.getFinalTransformation();
     if (icp_no_rotation) {
       T.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
     }
-    object_pose = invert_pose(T) * object_pose;
+    // object_pose = invert_pose(T) * object_pose;
+    T_icp = invert_pose(T);
     return dist;
   } else {
     console::print_error("ICP did not converge.");
@@ -442,13 +452,20 @@ float PoseEstimator::do_icp() {
 float PoseEstimator::do_auto_icp() {
   float min_azim, min_x, min_y, min_z, min_r(FLT_MAX);
   tformT minT;
-  for (float azim=0; azim<360.f; azim+=30.f) {
+  float prev_object_init_azim(object_init_azim), prev_object_init_dx(object_init_dx),
+      prev_object_init_dy(object_init_dy), prev_object_init_dz(object_init_dz);
+  // cm
+  float x_min(-2.f), x_max(2.f), x_step(2.f);
+  float y_min(-2.f), y_max(2.f), y_step(2.f);
+  float z_min(-1.f), z_max(1.f), z_step(1.f);
+  float azim_step(45.f);
+  for (float azim=0; azim<360.f; azim+=azim_step) {
     object_init_azim = azim;
-    for (float x=-0.f; x<=0.f; x+=1.f) {
+    for (float x=x_min/100.f; x<=x_max/100.f; x+=x_step/100.f) {
       object_init_dx = x;
-      for (float y=-0.f; y<=0.f; y+=1.f) {
+      for (float y=y_min/100.f; y<=y_max/100.f; y+=y_step/100.f) {
         object_init_dy = y;
-        for (float z=-0.f; z<=0.f; z+=1.f) {
+        for (float z=z_min/100.f; z<=z_max/100.f; z+=z_step/100.f) {
           object_init_dz = z;
           init_icp();
           float r = do_icp();
@@ -460,26 +477,30 @@ float PoseEstimator::do_auto_icp() {
             min_x = x;
             min_y = y;
             min_z = z;
-            minT = object_pose;
+            minT = T_icp;
             cout << "Minimum so far" << endl;
           }
         }
       }
     }
   }
+  cout << "Minimum Azim = " << min_azim << ", x = " << min_x << ", y = " << min_y
+       << ", z = " << min_z << ", residual = " << min_r << endl;
 
-  object_init_dx = min_x;
-  object_init_dy = min_y;
-  object_init_dz = min_z;
-  object_pose = minT;
-  object_init_azim = min_azim;
-  object_azim = tformT::Identity();
-  float s = sin(object_init_azim * float(M_PI)/180),
-      c = cos(object_init_azim * float(M_PI)/180);
-  object_azim(0, 0) = c;
-  object_azim(0, 1) = -s;
-  object_azim(1, 0) = s;
-  object_azim(1, 1) = c;
+  object_init_dx = prev_object_init_dx;
+  object_init_dy = prev_object_init_dy;
+  object_init_dz = prev_object_init_dz;
+  object_init_azim = prev_object_init_azim;
+  T_icp = minT;
+  object_adj = tformT::Identity();
+  float s = sin(min_azim * float(M_PI)/180), c = cos(min_azim * float(M_PI)/180);
+  object_adj(0, 0) = c;
+  object_adj(0, 1) = -s;
+  object_adj(1, 0) = s;
+  object_adj(1, 1) = c;
+  object_adj(0, 3) = min_x;
+  object_adj(1, 3) = min_y;
+  object_adj(2, 3) = min_z;
   return min_r;
 }
 
@@ -490,10 +511,13 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o(1, 3) = object_init_y;
   T_c_o(2, 3) = object_init_z;
   T_c_o *= get_tabletop_rot();
-  T_c_o *= object_pose * object_azim * object_flip;
+  // T_c_o *= object_pose * object_slide * object_adj * object_flip;
+  T_c_o *= get_object_pose();
 
-  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
-      invert_pose(object_flip);
+  // T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
+  //     invert_pose(object_flip);
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_icp) * invert_pose(T_c_b) * T_c_o *
+      invert_pose(object_flip) * invert_pose(object_slide);
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {
