@@ -25,14 +25,14 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   icp_max_corr_distance(0.02), icp_use_reciprocal_corr(false),
   icp_no_rotation(false),
   scale_axis('z'),
-  object_adj(PoseEstimator::tformT::Identity()),
+  object_adj_pos(PoseEstimator::tformT::Identity()),
+  object_adj_rot(PoseEstimator::tformT::Identity()),
   height_adjust(0.000),
   object_scale(PoseEstimator::tformT::Identity()),
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
   forced_object_scale(1.f),
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
-  object_slide(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
   white_thresh(150.f) {
   if (scene_) {
@@ -62,7 +62,8 @@ void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
 void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object = p;
   object_vox.setInputCloud(object);
-  object_adj = tformT::Identity();
+  object_adj_pos = tformT::Identity();
+  object_adj_rot = tformT::Identity();
   object_scale = tformT::Identity();
 }
 
@@ -308,8 +309,8 @@ void PoseEstimator::process_object() {
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
-  cout << "Object slid by " << object_slide(0, 3) << ", " << object_slide(1, 3)
-       << ", " << object_slide(2, 3) << endl;
+  cout << "Object slid by " << object_flip(0, 3) << ", " << object_flip(1, 3)
+       << ", " << object_flip(2, 3) << endl;
   cout << "Object flipped by " << object_flip_angles[0] << " X, "
        << object_flip_angles[1] << " Y, " << object_flip_angles[2] << " Z."
        << endl;
@@ -332,7 +333,7 @@ void PoseEstimator::process_object() {
       scale /= fabs(max_pt.z - min_pt.z);
       break;
     }
-    object_scale = object_adj = tformT::Identity();
+    object_scale = object_adj_rot = object_adj_pos = tformT::Identity();
     object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) = scale;
   } else {
     object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
@@ -371,10 +372,11 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 PoseEstimator::tformT PoseEstimator::get_object_pose() {
   tformT Tf = tformT::Identity();
   Tf(2, 3) = -height_adjust;
-  //tformT T = object_pose * Tf * object_azim * object_flip * object_scale;
-  tformT T = T_icp * T_b_f * T_f_o * Tf * object_slide * object_adj *
-      object_flip;
-  // T = object_flip * object_adj * object_slide;
+  tformT T = T_b_f * T_f_o * Tf * object_flip;
+  tformT P = tformT::Identity();
+  P.block<3, 1>(0, 3) = T.block<3, 1>(0, 3);
+  tformT R = P * object_adj_rot * invert_pose(P);
+  T = T_icp * object_adj_pos * R * T;
   return T;
 }
 
@@ -386,28 +388,38 @@ PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   return out;
 }
 
+PointXYZ PoseEstimator::get_minpt_offset() {
+  PointT ps_min, ps_max, po_min, po_max;
+  getMinMax3D(*scene_processed, ps_min, ps_max);
+  getMinMax3D(*get_processed_object(), po_min, po_max);
+  PointXYZ p(ps_min.x-po_min.x, ps_min.y-po_min.y, ps_min.z-po_min.z);
+  return p;
+}
+
 // initializes the data for running ICP
 void PoseEstimator::init_icp() {
+  T_icp = tformT::Identity();
   // object initial azimuth angle
   float s = sin(object_init_azim * float(M_PI)/180),
       c = cos(object_init_azim * float(M_PI)/180);
-  object_adj = tformT::Identity();
-  object_adj(0, 0) = c;
-  object_adj(0, 1) = -s;
-  object_adj(1, 0) = s;
-  object_adj(1, 1) = c;
-  object_adj(0, 3) = object_init_dx;
-  object_adj(1, 3) = object_init_dy;
-  object_adj(2, 3) = object_init_dz;
-  T_icp = tformT::Identity();
+  object_adj_rot = object_adj_pos = tformT::Identity();
+  object_adj_rot(0, 0) = c;
+  object_adj_rot(0, 1) = -s;
+  object_adj_rot(1, 0) = s;
+  object_adj_rot(1, 1) = c;
+  object_adj_pos(0, 3) = object_init_dx;
+  object_adj_pos(1, 3) = object_init_dy;
+  object_adj_pos(2, 3) = object_init_dz;
+  PointXYZ offset = get_minpt_offset();
+  object_adj_pos(0, 3) += offset.x;
+  object_adj_pos(1, 3) += offset.y;
+  object_adj_pos(2, 3) += offset.z;
 }
 
 // do ICP
 float PoseEstimator::do_icp() {
   IterativeClosestPoint_Exposed<PointT, PointT> icp;
   PointCloudT::ConstPtr obj_input = get_processed_object();
-  // transformPointCloud(*object_processed, *obj_input,
-  //                     object_pose*object_slide*object_adj*object_flip*object_scale);
   icp.setInputSource(scene_processed);
   icp.setInputTarget(obj_input);
 
@@ -450,14 +462,14 @@ float PoseEstimator::do_icp() {
 }
 
 float PoseEstimator::do_auto_icp() {
-  float min_azim, min_x, min_y, min_z, min_r(FLT_MAX);
+  float min_azim(0), min_x(0), min_y(0), min_z(0), min_r(FLT_MAX);
   tformT minT;
   float prev_object_init_azim(object_init_azim), prev_object_init_dx(object_init_dx),
       prev_object_init_dy(object_init_dy), prev_object_init_dz(object_init_dz);
   // cm
-  float x_min(-2.f), x_max(2.f), x_step(2.f);
-  float y_min(-2.f), y_max(2.f), y_step(2.f);
-  float z_min(-1.f), z_max(1.f), z_step(1.f);
+  float x_min(0.f), x_max(0.f), x_step(2.f);
+  float y_min(0.f), y_max(0.f), y_step(2.f);
+  float z_min(0.f), z_max(0.f), z_step(1.f);
   float azim_step(45.f);
   for (float azim=0; azim<360.f; azim+=azim_step) {
     object_init_azim = azim;
@@ -487,20 +499,26 @@ float PoseEstimator::do_auto_icp() {
   cout << "Minimum Azim = " << min_azim << ", x = " << min_x << ", y = " << min_y
        << ", z = " << min_z << ", residual = " << min_r << endl;
 
-  object_init_dx = prev_object_init_dx;
-  object_init_dy = prev_object_init_dy;
-  object_init_dz = prev_object_init_dz;
-  object_init_azim = prev_object_init_azim;
+  object_init_dx = min_x;
+  object_init_dy = min_y;
+  object_init_dz = min_z;
+  object_init_azim = min_azim;
+  init_icp();
   T_icp = minT;
-  object_adj = tformT::Identity();
-  float s = sin(min_azim * float(M_PI)/180), c = cos(min_azim * float(M_PI)/180);
-  object_adj(0, 0) = c;
-  object_adj(0, 1) = -s;
-  object_adj(1, 0) = s;
-  object_adj(1, 1) = c;
-  object_adj(0, 3) = min_x;
-  object_adj(1, 3) = min_y;
-  object_adj(2, 3) = min_z;
+  // object_init_dx = prev_object_init_dx;
+  // object_init_dy = prev_object_init_dy;
+  // object_init_dz = prev_object_init_dz;
+  // object_init_azim = prev_object_init_azim;
+  // T_icp = minT;
+  // object_adj_rot = object_adj_pos = tformT::Identity();
+  // float s = sin(min_azim * float(M_PI)/180), c = cos(min_azim * float(M_PI)/180);
+  // object_adj_rot(0, 0) = c;
+  // object_adj_rot(0, 1) = -s;
+  // object_adj_rot(1, 0) = s;
+  // object_adj_rot(1, 1) = c;
+  // object_adj_pos(0, 3) = min_x;
+  // object_adj_pos(1, 3) = min_y;
+  // object_adj_pos(2, 3) = min_z;
   return min_r;
 }
 
@@ -511,13 +529,14 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o(1, 3) = object_init_y;
   T_c_o(2, 3) = object_init_z;
   T_c_o *= get_tabletop_rot();
-  // T_c_o *= object_pose * object_slide * object_adj * object_flip;
   T_c_o *= get_object_pose();
 
-  // T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
-  //     invert_pose(object_flip);
-  T_f_o = invert_pose(T_b_f) * invert_pose(T_icp) * invert_pose(T_c_b) * T_c_o *
-      invert_pose(object_flip) * invert_pose(object_slide);
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
+      invert_pose(object_flip);
+
+  tformT T = tformT::Identity();
+  T.block<3, 1>(0, 3) = object_flip.block<3, 1>(0, 3);
+  T_c_o *= T;
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {

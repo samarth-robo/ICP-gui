@@ -40,9 +40,9 @@ public:
   void set_tt_pose(const tformT &T);
   void set_object_flip_angles(float rx, float ry, float rz);
   void set_object_slide(float tx, float ty, float tz) {
-    object_slide(0, 3) = tx / 100.f;
-    object_slide(1, 3) = ty / 100.f;
-    object_slide(2, 3) = tz / 100.f;
+    object_flip(0, 3) = tx / 100.f;
+    object_flip(1, 3) = ty / 100.f;
+    object_flip(2, 3) = tz / 100.f;
   }
 
   // getters
@@ -92,6 +92,7 @@ private:
   // pose util functions
   tformT get_tabletop_rot(Eigen::Vector3f obj_normal = Eigen::Vector3f(0, 0, 1));
   tformT invert_pose(tformT const &in);
+  pcl::PointXYZ get_minpt_offset();
 
   float scene_leaf_size, object_leaf_size;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;
@@ -106,7 +107,7 @@ private:
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_plane_hull_points;
-  tformT object_adj, object_scale, object_flip, object_slide;
+  tformT object_adj_pos, object_adj_rot, object_scale, object_flip;
   float axis_size;  // size of object along an axis in the scene
   char scale_axis;  // which axis to use for scaling
   float forced_object_scale;

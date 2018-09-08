@@ -516,23 +516,6 @@ void PCLViewer::dir_select_clicked(bool checked) {
   }
   cout << "Object name is " << object_name << endl;
 
-  // refresh combo-box and populate with list of pcds in directory
-  QComboBox *cb = ui->scene_select_combo_box;
-  cb->clear();
-  bfs::path root(root_dir+string("/pointclouds"));
-  if (bfs::is_directory(root)) {
-    for (auto it : bfs::directory_iterator(root)) {
-      string filename = it.path().filename().string();
-      cb->addItem(QString(filename.c_str()));
-      cout << "Found " << filename << endl;
-    }
-    // load the first pointcloud
-    scene_select_combo_box_activated(ui->scene_select_combo_box->itemText(0));
-  } else {
-    cout << "WARN: 'pointclouds' directory not found in " << root_dir << endl;
-    return;
-  }
-
   // read init XYZ info from txt file
   filename = root_dir + string("/poses/tt_base.txt");
   f.open(filename);
@@ -563,6 +546,23 @@ void PCLViewer::dir_select_clicked(bool checked) {
   ui->object_y_line_edit->setText(s);
   s.setNum(T(2, 3));
   ui->object_z_line_edit->setText(s);
+
+  // refresh combo-box and populate with list of pcds in directory
+  QComboBox *cb = ui->scene_select_combo_box;
+  cb->clear();
+  bfs::path root(root_dir+string("/pointclouds"));
+  if (bfs::is_directory(root)) {
+    for (auto it : bfs::directory_iterator(root)) {
+      string filename = it.path().filename().string();
+      cb->addItem(QString(filename.c_str()));
+      cout << "Found " << filename << endl;
+    }
+    // load the first pointcloud
+    scene_select_combo_box_activated(ui->scene_select_combo_box->itemText(0));
+  } else {
+    cout << "WARN: 'pointclouds' directory not found in " << root_dir << endl;
+    return;
+  }
 
   // read parameters for flipping object
   f.open(root_dir + string("/object_flip.txt"));
