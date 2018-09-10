@@ -7,9 +7,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/surface/convex_hull.h>
-#include <pcl/registration/transformation_estimation_svd_scale.h>
 #include <pcl/registration/registration.h>
-#include <pcl/segmentation/region_growing_rgb.h>
 
 #include <fstream>
 
@@ -21,7 +19,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.3f), scene_boxsize_y(0.3f), scene_boxsize_z(0.3f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
-  icp_n_iters(20), icp_outlier_rejection_thresh(0.005),
+  icp_n_iters(50), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.02), icp_use_reciprocal_corr(false),
   icp_no_rotation(false),
   scale_axis('z'),
@@ -34,7 +32,8 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
-  white_thresh(150.f) {
+  white_thresh(150.f),
+  te_2D_icp(boost::make_shared<TE2D>()) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -429,6 +428,7 @@ float PoseEstimator::do_icp() {
   icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
   icp.setEuclideanFitnessEpsilon(1e-12);
   icp.setTransformationEpsilon(1e-12);
+  if (icp_no_rotation) icp.setTransformationEstimation(te_2D_icp);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);
@@ -449,9 +449,9 @@ float PoseEstimator::do_icp() {
 
     // get final object pose
     tformT T = icp.getFinalTransformation();
-    if (icp_no_rotation) {
-      T.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
-    }
+    // if (icp_no_rotation) {
+    //   T.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
+    // }
     // object_pose = invert_pose(T) * object_pose;
     T_icp = invert_pose(T);
     return dist;
@@ -505,10 +505,10 @@ float PoseEstimator::do_auto_icp() {
   object_init_azim = min_azim;
   init_icp();
   T_icp = minT;
-  // object_init_dx = prev_object_init_dx;
-  // object_init_dy = prev_object_init_dy;
-  // object_init_dz = prev_object_init_dz;
-  // object_init_azim = prev_object_init_azim;
+  object_init_dx = prev_object_init_dx;
+  object_init_dy = prev_object_init_dy;
+  object_init_dz = prev_object_init_dz;
+  object_init_azim = prev_object_init_azim;
   // T_icp = minT;
   // object_adj_rot = object_adj_pos = tformT::Identity();
   // float s = sin(min_azim * float(M_PI)/180), c = cos(min_azim * float(M_PI)/180);

@@ -4,6 +4,7 @@
 #include "pcl_includes.h"
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/registration/icp.h>
+#include <pcl/registration/transformation_estimation_2D.h>
 
 class PoseEstimator
 {
@@ -116,6 +117,9 @@ private:
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
   tformT T_b_f, T_c_b, T_f_o, T_icp;  // needed for pose suggestions
   float white_thresh;  // color threshold for white object segmentation
+  // transformation estimation object for only (x, y, theta) ICP
+  typedef pcl::registration::TransformationEstimation2D<PointT, PointT> TE2D;
+  TE2D::Ptr te_2D_icp;
 };
 
 
