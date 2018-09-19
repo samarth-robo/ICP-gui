@@ -32,7 +32,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
-  white_thresh(150.f),
+  white_thresh(100.f),
   te_2D_icp(boost::make_shared<TE2D>()) {
   if (scene_) {
     scene = scene_;
@@ -56,6 +56,8 @@ void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
   scene_vox.setInputCloud(scene);
   // crop and subsample scene
   crop_subsample_scene();
+  PointT min_pt, max_pt;
+  getMinMax3D<PointT>(*scene, min_pt, max_pt);
 }
 
 void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
@@ -64,6 +66,8 @@ void PoseEstimator::set_object(const PointCloudT::Ptr &p) {
   object_adj_pos = tformT::Identity();
   object_adj_rot = tformT::Identity();
   object_scale = tformT::Identity();
+  PointT min_pt, max_pt;
+  getMinMax3D<PointT>(*object, min_pt, max_pt);
 }
 
 void PoseEstimator::set_tt_pose(const tformT &T) {
@@ -265,11 +269,11 @@ void PoseEstimator::process_scene() {
   transformPointCloud(*scene_processed, *scene_processed, T);
 
   // remove noise
-  // StatisticalOutlierRemoval<PointT> sor;
-  // sor.setInputCloud(scene_processed);
-  // sor.setMeanK(50);
-  // sor.setStddevMulThresh(1.0);
-  // sor.filter(*scene_processed);
+  StatisticalOutlierRemoval<PointT> sor;
+  sor.setInputCloud(scene_processed);
+  sor.setMeanK(50);
+  sor.setStddevMulThresh(1.0);
+  sor.filter(*scene_processed);
 
   // measure dimension of object - highly recommended along Z axis!
   PointT min_pt, max_pt;
@@ -308,6 +312,8 @@ void PoseEstimator::process_object() {
   object_vox.setLeafSize(object_leaf_size, object_leaf_size, object_leaf_size);
   object_vox.filter(*object_processed);
 
+  // flip object
+  pcl::transformPointCloud(*object_processed, *object_processed, object_flip);
   cout << "Object slid by " << object_flip(0, 3) << ", " << object_flip(1, 3)
        << ", " << object_flip(2, 3) << endl;
   cout << "Object flipped by " << object_flip_angles[0] << " X, "
@@ -315,11 +321,9 @@ void PoseEstimator::process_object() {
        << endl;
 
   if (forced_object_scale < 0.f) {
-    PointCloudT::Ptr object_flipped = boost::make_shared<PointCloudT>();
-    transformPointCloud(*object_processed, *object_flipped, object_flip);
     // scale by size of object in scene
     PointT min_pt, max_pt;
-    getMinMax3D<PointT>(*object_flipped, min_pt, max_pt);
+    getMinMax3D<PointT>(*object_processed, min_pt, max_pt);
     float scale = axis_size;
     switch (scale_axis) {
     case 'x':
@@ -371,7 +375,7 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 PoseEstimator::tformT PoseEstimator::get_object_pose() {
   tformT Tf = tformT::Identity();
   Tf(2, 3) = -height_adjust;
-  tformT T = T_b_f * T_f_o * Tf * object_flip;
+  tformT T = T_b_f * T_f_o * Tf;
   tformT P = tformT::Identity();
   P.block<3, 1>(0, 3) = T.block<3, 1>(0, 3);
   tformT R = P * object_adj_rot * invert_pose(P);
@@ -434,8 +438,6 @@ float PoseEstimator::do_icp() {
   icp.align(*obj_aligned);
   tformT guess = tformT::Identity();
   if (true) {
-    // cout << "ICP converged" << endl;
-
     auto tree = icp.getSearchMethodTarget();
     float dist(0.f);
     std::vector<int> idx(1);
@@ -445,14 +447,9 @@ float PoseEstimator::do_icp() {
       dist += dists[0];
     }
     dist /= scene_processed->points.size();
-    // cout << "Energy = " << dist << endl;
 
     // get final object pose
     tformT T = icp.getFinalTransformation();
-    // if (icp_no_rotation) {
-    //   T.block<3,3>(0, 0) = Eigen::Matrix3f::Identity();
-    // }
-    // object_pose = invert_pose(T) * object_pose;
     T_icp = invert_pose(T);
     return dist;
   } else {
@@ -509,16 +506,6 @@ float PoseEstimator::do_auto_icp() {
   object_init_dy = prev_object_init_dy;
   object_init_dz = prev_object_init_dz;
   object_init_azim = prev_object_init_azim;
-  // T_icp = minT;
-  // object_adj_rot = object_adj_pos = tformT::Identity();
-  // float s = sin(min_azim * float(M_PI)/180), c = cos(min_azim * float(M_PI)/180);
-  // object_adj_rot(0, 0) = c;
-  // object_adj_rot(0, 1) = -s;
-  // object_adj_rot(1, 0) = s;
-  // object_adj_rot(1, 1) = c;
-  // object_adj_pos(0, 3) = min_x;
-  // object_adj_pos(1, 3) = min_y;
-  // object_adj_pos(2, 3) = min_z;
   return min_r;
 }
 
@@ -531,12 +518,7 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o *= get_tabletop_rot();
   T_c_o *= get_object_pose();
 
-  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o *
-      invert_pose(object_flip);
-
-  tformT T = tformT::Identity();
-  T.block<3, 1>(0, 3) = object_flip.block<3, 1>(0, 3);
-  T_c_o *= T;
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o;
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {

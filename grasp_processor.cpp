@@ -11,30 +11,75 @@ GraspProcessor::GraspProcessor(string data_dir) :
   scene_cloud(new PointCloudT()),
   object_cloud(new PointCloudT()),
   pe(new PoseEstimator()),
-  plane_locked(false) {}
+  plane_locked(false) {
+  // init the random number generator
+  std::srand(std::time(0));
+}
 
-bool GraspProcessor::process_grasp(string object_name, string session_name) {
+bool GraspProcessor::process_grasp(string object_name, string session_name,
+                                   bool restrict_rotation) {
+  if (restrict_rotation) cout << "## Rotation restricted" << endl;
   // paths
   bfs::path base_dir = data_dir / session_name / object_name;
   bfs::path pc_dir = base_dir / "pointclouds";
 
-  // read the names of views to be processed
-  vector<bfs::path> pc_filenames;
-  bfs::path views_filename = base_dir / "views.txt";
+  // read the names of views to be excluded
+  bfs::path views_filename = base_dir / "excluded_views.txt";
   ifstream f(views_filename.string());
   if (!f.is_open()) {
     PCL_ERROR("Could not open %s for reading\n", views_filename.string().c_str());
   }
   string pc_id;
-  while (f >> pc_id) {
-    bfs::path pc_filename = pc_dir / (pc_id + ".pcd");
-    pc_filenames.push_back(pc_filename);
-  }
+  vector<string> excluded_ids;
+  while (f >> pc_id) excluded_ids.push_back(pc_id);
   f.close();
+
+  // list of pointclouds to be processed
+  vector<bfs::path> pc_filenames;
+  for (bfs::directory_iterator i(pc_dir); i != bfs::directory_iterator(); i++) {
+    if (!bfs::is_regular_file(i->path())) continue;
+    bool excluded(false);
+    for (const auto &e_id: excluded_ids) {
+      if (i->path().stem().string().find(e_id) != string::npos) {
+        excluded = true;
+        break;
+      }
+    }
+    if (excluded) continue;
+    pc_filenames.push_back(i->path());
+  }
+  random_shuffle(pc_filenames.begin(), pc_filenames.end());
+
+  // check if the first view is set
+  bfs::path first_view_filename = base_dir / "first_view.txt";
+  f.open(first_view_filename.string());
+  if (!f.is_open()) {
+    PCL_ERROR("Could not open %s for reading\n",
+              first_view_filename.string().c_str());
+  }
+  string first_view;
+  while (f >> first_view) {}
+  f.close();
+  if (!first_view.empty()) {
+    cout << "First view is set to " << first_view << endl;
+    // find index of the first view
+    int idx(-1);
+    for (int i=0; i<pc_filenames.size(); i++) {
+      if (first_view.compare(pc_filenames[i].stem().string()) == 0) {
+        idx = i;
+        break;
+      }
+    }
+    // bring it to the front
+    if (idx != 0) std::iter_swap(pc_filenames.begin(), pc_filenames.begin()+idx);
+  }
+
+  cout << "Will process (in order) ";
+  for (const auto &p: pc_filenames) cout << p.stem() << " ";
+  cout << endl;
 
   // read object name
   bfs::path object_name_filename = base_dir / "object_name.txt";
-  string real_object_name;
   f.open(object_name_filename.string());
   if (f.is_open()) {
     f >> real_object_name;
@@ -45,19 +90,6 @@ bool GraspProcessor::process_grasp(string object_name, string session_name) {
     return false;
   }
   cout << "Object name is " << real_object_name << endl;
-
-  // read the object pointcloud
-  bfs::path cloud_filename = bfs::path(std::getenv("HOME")) / "deepgrasp_data"
-      / "models" / (real_object_name + string(".ply"));
-  sample_mesh<PointT>(cloud_filename.string(), object_cloud);
-  if (object_cloud->empty()) {
-    PCL_ERROR("Could not load file %s\n", cloud_filename.string().c_str());
-    return false;
-  } else {
-    pe->set_object(object_cloud);
-    cout << "Loaded object of size " << object_cloud->width << " x "
-         << object_cloud->height << endl;
-  }
 
   // read init XYZ info from txt file
   bfs::path tt_base_filename = base_dir / "poses" / "tt_base.txt";
@@ -99,16 +131,20 @@ bool GraspProcessor::process_grasp(string object_name, string session_name) {
   pe->set_object_slide(object_slide_x, object_slide_y, object_slide_z);
 
   // process the views
-  for (const auto &p: pc_filenames) {
-    if (!process_view(p, base_dir)) {
-      PCL_ERROR("Error processing view %s\n", p.string().c_str());
+  pe->set_icp_no_rotation(restrict_rotation);
+  for (int i=0; i<pc_filenames.size(); i++) {
+    string pc_filename(pc_filenames[i].string());
+    if (!process_view(pc_filename, base_dir)) {
+      PCL_ERROR("Error processing view %s\n", pc_filename.c_str());
       return false;
     }
   }
+  pe->set_icp_no_rotation(false);
   return true;
 }
 
 bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
+  // load scene
   if (io::loadPCDFile<PointT>(pc_filename.string(), *scene_cloud) == -1) {
     PCL_ERROR("Could not load file %s\n", pc_filename.string().c_str());
     return false;
@@ -116,6 +152,19 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
     pe->set_scene(scene_cloud);
     cout << "Loaded scene of size " << scene_cloud->width << " x "
          << scene_cloud->height << " from " << pc_filename.string() << endl;
+  }
+
+  // read the object pointcloud
+  bfs::path cloud_filename = bfs::path(std::getenv("HOME")) / "deepgrasp_data"
+      / "models" / (real_object_name + string(".ply"));
+  sample_mesh<PointT>(cloud_filename.string(), object_cloud);
+  if (object_cloud->empty()) {
+    PCL_ERROR("Could not load file %s\n", cloud_filename.string().c_str());
+    return false;
+  } else {
+    pe->set_object(object_cloud);
+    cout << "Loaded object of size " << object_cloud->width << " x "
+         << object_cloud->height << endl;
   }
 
   // read turntable state
@@ -153,6 +202,7 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
   pe->set_object_init_dx(0);
   pe->set_object_init_dy(0);
   pe->set_object_init_dz(0);
+  pe->init_icp();
   pe->do_auto_icp();
   bfs::path pose_filename = base_dir / "poses" /
       (string("tt_frame_") + scene_id + ".txt");
