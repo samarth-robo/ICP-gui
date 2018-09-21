@@ -85,6 +85,7 @@ public:
   float do_auto_icp();
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
   bool write_tt_file(std::string tt_base_filename);
+  bool write_segmented_object(std::string filename);
   bool estimate_plane_params();
   bool set_T_b_f(std::string filename);
 
@@ -105,6 +106,7 @@ private:
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;
+  PointCloudT::Ptr scene_object_segmented;
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
   pcl::ModelCoefficientsPtr scene_plane_coeffs;
   PointCloudT::Ptr scene_plane_hull_points;

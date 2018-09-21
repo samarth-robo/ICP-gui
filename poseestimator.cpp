@@ -1,5 +1,6 @@
 #include "poseestimator.h"
 
+#include <pcl/io/pcd_io.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -48,6 +49,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_processed          = boost::make_shared<PointCloudT>();
   object_processed         = boost::make_shared<PointCloudT>();
   scene_plane_hull_points  = boost::make_shared<PointCloudT>();
+  scene_object_segmented   = boost::make_shared<PointCloudT>();
   scene_plane_coeffs       = boost::make_shared<ModelCoefficients>();
 }
 
@@ -264,9 +266,9 @@ void PoseEstimator::process_scene() {
   extract.filter(*scene_processed);
 
   // fudge factor
-  T = tformT::Identity();
-  T(2, 3) = height_adjust;
-  transformPointCloud(*scene_processed, *scene_processed, T);
+  tformT T_fudge = tformT::Identity();
+  T_fudge(2, 3) = height_adjust;
+  transformPointCloud(*scene_processed, *scene_processed, T_fudge);
 
   // remove noise
   StatisticalOutlierRemoval<PointT> sor;
@@ -274,6 +276,11 @@ void PoseEstimator::process_scene() {
   sor.setMeanK(50);
   sor.setStddevMulThresh(1.0);
   sor.filter(*scene_processed);
+
+  // save the segmented object
+  copyPointCloud(*scene_processed, *scene_object_segmented);
+  transformPointCloud(*scene_object_segmented, *scene_object_segmented,
+                      invert_pose(T));
 
   // measure dimension of object - highly recommended along Z axis!
   PointT min_pt, max_pt;
@@ -574,6 +581,11 @@ bool PoseEstimator::write_tt_file(std::string tt_base_filename) {
   ofile.close();
 
   return true;
+}
+
+bool PoseEstimator::write_segmented_object(std::string filename) {
+  bool done = io::savePCDFile(filename, *scene_object_segmented) == 0;
+  return done;
 }
 
 /*

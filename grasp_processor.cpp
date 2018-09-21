@@ -45,6 +45,8 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
         break;
       }
     }
+    if (i->path().stem().string().find("segmented_object") != string::npos)
+      excluded = true;
     if (excluded) continue;
     pc_filenames.push_back(i->path());
   }
@@ -209,6 +211,12 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
   bfs::path scale_filename = base_dir / "scale.txt";
   if (pe->write_pose_file(pose_filename.string(), scale_filename.string())) {
     cout << pose_filename << " and " << scale_filename << " written" << endl;
+  } else return false;
+
+  bfs::path segmented_object_filename = base_dir / "pointclouds" /
+      (scene_id + "_segmented_object.pcd");
+  if (pe->write_segmented_object(segmented_object_filename.string())) {
+    cout << segmented_object_filename << " written" << endl;
   } else return false;
   return true;
 }
