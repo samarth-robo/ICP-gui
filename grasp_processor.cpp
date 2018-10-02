@@ -63,7 +63,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   while (f >> first_view) {}
   f.close();
   if (!first_view.empty()) {
-    cout << "First view is set to " << first_view << endl;
+    // cout << "First view is set to " << first_view << endl;
     // find index of the first view
     int idx(-1);
     for (int i=0; i<pc_filenames.size(); i++) {
@@ -72,13 +72,17 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
         break;
       }
     }
+    if (idx < 0 || idx >= pc_filenames.size()) {
+      cerr << "First view " << first_view << " is wrong" << endl;
+      return false;
+    }
     // bring it to the front
     if (idx != 0) std::iter_swap(pc_filenames.begin(), pc_filenames.begin()+idx);
   }
 
-  cout << "Will process (in order) ";
-  for (const auto &p: pc_filenames) cout << p.stem() << " ";
-  cout << endl;
+  // cout << "Will process (in order) ";
+  // for (const auto &p: pc_filenames) cout << p.stem() << " ";
+  // cout << endl;
 
   // read object name
   bfs::path object_name_filename = base_dir / "object_name.txt";
@@ -152,8 +156,8 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
     return false;
   } else {
     pe->set_scene(scene_cloud);
-    cout << "Loaded scene of size " << scene_cloud->width << " x "
-         << scene_cloud->height << " from " << pc_filename.string() << endl;
+    // cout << "Loaded scene of size " << scene_cloud->width << " x "
+    //      << scene_cloud->height << " from " << pc_filename.string() << endl;
   }
 
   // read the object pointcloud
@@ -165,8 +169,8 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
     return false;
   } else {
     pe->set_object(object_cloud);
-    cout << "Loaded object of size " << object_cloud->width << " x "
-         << object_cloud->height << endl;
+    // cout << "Loaded object of size " << object_cloud->width << " x "
+    //      << object_cloud->height << endl;
   }
 
   // read turntable state
@@ -184,18 +188,18 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
       return false;
     }
     plane_estimated = true;
-    cout << "Plane estimated" << endl;
+    // cout << "Plane estimated" << endl;
     bfs::path tt_base_filename = base_dir / "poses" / "tt_base.txt";
     if (pe->write_tt_file(tt_base_filename.string())) {
       plane_locked = true;
-      cout << tt_base_filename.string() << " written" << endl;
+      // cout << tt_base_filename.string() << " written" << endl;
     } else {
       cout << "Could not open " << tt_base_filename << " for writing" << endl;
       return false;
     }
   } else {
     plane_estimated = true;
-    cout << "Previous plane estimate used" << endl;
+    // cout << "Previous plane estimate used" << endl;
   }
 
   pe->process_scene();
@@ -210,13 +214,13 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
       (string("tt_frame_") + scene_id + ".txt");
   bfs::path scale_filename = base_dir / "scale.txt";
   if (pe->write_pose_file(pose_filename.string(), scale_filename.string())) {
-    cout << pose_filename << " and " << scale_filename << " written" << endl;
+    // cout << pose_filename << " and " << scale_filename << " written" << endl;
   } else return false;
 
   bfs::path segmented_object_filename = base_dir / "pointclouds" /
       (scene_id + "_segmented_object.pcd");
   if (pe->write_segmented_object(segmented_object_filename.string())) {
-    cout << segmented_object_filename << " written" << endl;
+    // cout << segmented_object_filename << " written" << endl;
   } else return false;
   return true;
 }

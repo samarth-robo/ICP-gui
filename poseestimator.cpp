@@ -140,7 +140,7 @@ bool PoseEstimator::set_T_b_f(std::string filename) {
 
 bool PoseEstimator::estimate_plane_params() {
   // estimate the plane
-  console::print_info("Estimating plane...");
+  // console::print_info("Estimating plane...");
   PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
   SACSegmentation<PointT> plane_seg;
   plane_seg.setOptimizeCoefficients(true);
@@ -149,13 +149,13 @@ bool PoseEstimator::estimate_plane_params() {
   plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
   plane_seg.setMaxIterations(1e6);
   plane_seg.setAxis(tt_axis);
-  plane_seg.setEpsAngle(5 * M_PI/180.0);
+  plane_seg.setEpsAngle(10 * M_PI/180.0);
   plane_seg.setInputCloud(scene_cropped_subsampled);
   plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
   if (plane_inliers->indices.size() == 0) {
     console::print_error("No plane found in the scene.");
     return false;
-  } else console::print_info("done.\n");
+  } // else console::print_info("done.\n");
 
   // flip the plane normal if needed
   Eigen::Vector3f n(scene_plane_coeffs->values[0], scene_plane_coeffs->values[1],
@@ -271,11 +271,11 @@ void PoseEstimator::process_scene() {
   transformPointCloud(*scene_processed, *scene_processed, T_fudge);
 
   // remove noise
-  StatisticalOutlierRemoval<PointT> sor;
-  sor.setInputCloud(scene_processed);
-  sor.setMeanK(50);
-  sor.setStddevMulThresh(1.0);
-  sor.filter(*scene_processed);
+  // StatisticalOutlierRemoval<PointT> sor;
+  // sor.setInputCloud(scene_processed);
+  // sor.setMeanK(5);
+  // sor.setStddevMulThresh(3);
+  // sor.filter(*scene_processed);
 
   // save the segmented object
   copyPointCloud(*scene_processed, *scene_object_segmented);
@@ -298,8 +298,8 @@ void PoseEstimator::process_scene() {
       axis_size = fabs(max_pt.z - min_pt.z);
       break;
   }
-  console::print_info("Scene object dimension along %c axis is %4.3f\n",
-                      scale_axis, axis_size);
+  // console::print_info("Scene object dimension along %c axis is %4.3f\n",
+  //                     scale_axis, axis_size);
 }
 
 void PoseEstimator::set_object_flip_angles(float rx, float ry, float rz) {
@@ -321,11 +321,11 @@ void PoseEstimator::process_object() {
 
   // flip object
   pcl::transformPointCloud(*object_processed, *object_processed, object_flip);
-  cout << "Object slid by " << object_flip(0, 3) << ", " << object_flip(1, 3)
-       << ", " << object_flip(2, 3) << endl;
-  cout << "Object flipped by " << object_flip_angles[0] << " X, "
-       << object_flip_angles[1] << " Y, " << object_flip_angles[2] << " Z."
-       << endl;
+  // cout << "Object slid by " << object_flip(0, 3) << ", " << object_flip(1, 3)
+  //      << ", " << object_flip(2, 3) << endl;
+  // cout << "Object flipped by " << object_flip_angles[0] << " X, "
+  //      << object_flip_angles[1] << " Y, " << object_flip_angles[2] << " Z."
+  //      << endl;
 
   if (forced_object_scale < 0.f) {
     // scale by size of object in scene
@@ -348,9 +348,9 @@ void PoseEstimator::process_object() {
   } else {
     object_scale(0, 0) = object_scale(1, 1) = object_scale(2, 2) =
         forced_object_scale;
-    cout << "Object scale forced" << endl;
+    // cout << "Object scale forced" << endl;
   }
-  cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
+  // cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }
 
 // gives rotation of turntable w.r.t. camera
@@ -485,8 +485,8 @@ float PoseEstimator::do_auto_icp() {
           object_init_dz = z;
           init_icp();
           float r = do_icp();
-          cout << "Azim = " << azim << ", x = " << x << ", y = " << y
-               << ", z = " << z << ", residual = " << r << endl;
+          // cout << "Azim = " << azim << ", x = " << x << ", y = " << y
+          //      << ", z = " << z << ", residual = " << r << endl;
           if (r < min_r) {
             min_r = r;
             min_azim = azim;
@@ -494,14 +494,15 @@ float PoseEstimator::do_auto_icp() {
             min_y = y;
             min_z = z;
             minT = T_icp;
-            cout << "Minimum so far" << endl;
+            // cout << "Minimum so far" << endl;
           }
         }
       }
     }
   }
-  cout << "Minimum Azim = " << min_azim << ", x = " << min_x << ", y = " << min_y
-       << ", z = " << min_z << ", residual = " << min_r << endl;
+  // cout << "Minimum Azim = " << min_azim << ", x = " << min_x << ", y = " << min_y
+  //      << ", z = " << min_z << ", residual = " << min_r << endl;
+  if (min_r > 5e-5) cout << "### WARN: Minimum residual " << min_r << endl;
 
   object_init_dx = min_x;
   object_init_dy = min_y;

@@ -163,7 +163,7 @@ void sample_mesh(std::string ply_filename, typename PointCloud<PointT>::Ptr &clo
                  int n_samples, bool process_normals) {
   vtkSmartPointer<vtkPolyData> polydata1 = vtkSmartPointer<vtkPolyData>::New ();
   pcl::PolygonMesh mesh;
-  std::cout << "Loading " << ply_filename << std::endl;
+  // std::cout << "Loading " << ply_filename << std::endl;
   pcl::io::loadPolygonFilePLY (ply_filename, mesh);
   pcl::io::mesh2vtk (mesh, polydata1);
 

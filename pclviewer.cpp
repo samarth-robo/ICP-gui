@@ -554,6 +554,7 @@ void PCLViewer::dir_select_clicked(bool checked) {
   if (bfs::is_directory(root)) {
     for (auto it : bfs::directory_iterator(root)) {
       string filename = it.path().filename().string();
+      if (filename.find("segmented") != string::npos) continue;
       cb->addItem(QString(filename.c_str()));
       cout << "Found " << filename << endl;
     }
