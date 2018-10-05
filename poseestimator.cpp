@@ -34,7 +34,9 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
   white_thresh(100.f),
-  te_2D_icp(boost::make_shared<TE2D>()) {
+  te_2D_icp(boost::make_shared<TE2D>()),
+  T_b_f_offset(PoseEstimator::tformT::Identity()),
+  T_b_f_offset_locked(false) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -135,6 +137,10 @@ bool PoseEstimator::set_T_b_f(std::string filename) {
   f >> T_b_f(2, 2);
   f.close();
 
+  if (!T_b_f_offset_locked) {
+    T_b_f_offset = invert_pose(T_b_f);
+    T_b_f_offset_locked = true;
+  }
   return true;
 }
 
@@ -382,7 +388,7 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 PoseEstimator::tformT PoseEstimator::get_object_pose() {
   tformT Tf = tformT::Identity();
   Tf(2, 3) = -height_adjust;
-  tformT T = T_b_f * T_f_o * Tf;
+  tformT T = T_b_f_offset * T_b_f * T_f_o * Tf;
   tformT P = tformT::Identity();
   P.block<3, 1>(0, 3) = T.block<3, 1>(0, 3);
   tformT R = P * object_adj_rot * invert_pose(P);
@@ -526,7 +532,8 @@ bool PoseEstimator::write_pose_file(std::string pose_filename,
   T_c_o *= get_tabletop_rot();
   T_c_o *= get_object_pose();
 
-  T_f_o = invert_pose(T_b_f) * invert_pose(T_c_b) * T_c_o;
+  T_f_o = invert_pose(T_b_f) * invert_pose(T_b_f_offset) * invert_pose(T_c_b)
+      * T_c_o;
 
   ofstream f(pose_filename, std::ios_base::app);
   if (!f.is_open()) {

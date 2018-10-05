@@ -117,7 +117,8 @@ private:
   float height_adjust;  // adjustment to height of object
   Eigen::Vector3f tt_axis;  // turntable axis of rotation
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
-  tformT T_b_f, T_c_b, T_f_o, T_icp;  // needed for pose suggestions
+  tformT T_b_f, T_c_b, T_f_o, T_icp, T_b_f_offset;  // needed for pose suggestions
+  bool T_b_f_offset_locked;
   float white_thresh;  // color threshold for white object segmentation
   // transformation estimation object for only (x, y, theta) ICP
   typedef pcl::registration::TransformationEstimation2D<PointT, PointT> TE2D;

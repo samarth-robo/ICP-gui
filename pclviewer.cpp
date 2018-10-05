@@ -552,12 +552,43 @@ void PCLViewer::dir_select_clicked(bool checked) {
   cb->clear();
   bfs::path root(root_dir+string("/pointclouds"));
   if (bfs::is_directory(root)) {
+    vector<string> filenames;
     for (auto it : bfs::directory_iterator(root)) {
       string filename = it.path().filename().string();
       if (filename.find("segmented") != string::npos) continue;
-      cb->addItem(QString(filename.c_str()));
+      filenames.push_back(filename);
       cout << "Found " << filename << endl;
     }
+    random_shuffle(filenames.begin(), filenames.end());
+    // check if the first view is set
+    string first_view_filename = root_dir + string("/first_view.txt");
+    f.open(first_view_filename);
+    if (!f.is_open()) {
+      PCL_ERROR("Could not open %s for reading\n", first_view_filename.c_str());
+    }
+    string first_view;
+    while (f >> first_view) {}
+    f.close();
+    if (!first_view.empty()) {
+      // cout << "First view is set to " << first_view << endl;
+      // find index of the first view
+      int idx(-1);
+      for (int i=0; i<filenames.size(); i++) {
+        if (filenames[i].find(first_view) == 0) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0 || idx >= filenames.size()) {
+        cerr << "First view " << first_view << " is wrong" << endl;
+        return;
+      }
+      // bring it to the front
+      if (idx != 0) std::iter_swap(filenames.begin(), filenames.begin()+idx);
+    }
+
+    for (const auto &filename: filenames)
+      cb->addItem(QString(filename.c_str()));
     // load the first pointcloud
     scene_select_combo_box_activated(ui->scene_select_combo_box->itemText(0));
   } else {
