@@ -38,7 +38,8 @@ public slots:
     void forced_object_scale_changed(const QString &t);
     void height_adjust_changed(const QString &t);
     void icp_recip_corr_clicked(int state);
-    void icp_no_rotation_clicked(int state);
+    void icp_no_rollpitch_clicked(int state);
+    void icp_symmetric_object_clicked(int state);
     void scene_estimate_plane_clicked(bool checked);
     void scene_save_plane_clicked(bool checked);
     void scene_process_clicked(bool checked);

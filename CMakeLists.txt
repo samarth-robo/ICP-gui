@@ -39,5 +39,6 @@ add_executable(grasp_processor
     grasp_processor.h
     poseestimator.cpp
     poseestimator.h
-    mesh_sample.cpp)
+    mesh_sample.cpp
+    warp_functions.h)
 target_link_libraries(grasp_processor ${PCL_LIBRARIES})

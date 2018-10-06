@@ -22,7 +22,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_azim(0.f),
   icp_n_iters(50), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.02), icp_use_reciprocal_corr(false),
-  icp_no_rotation(false),
+  icp_no_rollpitch(false), icp_symmetric_object(false),
   scale_axis('z'),
   object_adj_pos(PoseEstimator::tformT::Identity()),
   object_adj_rot(PoseEstimator::tformT::Identity()),
@@ -34,7 +34,10 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
   white_thresh(100.f),
-  te_2D_icp(boost::make_shared<TE2D>()),
+  te_lm(boost::make_shared<TELM>()),
+  warp_no_azim(boost::make_shared<WarpNoAzim>()),
+  warp_no_rotation(boost::make_shared<WarpNoRotation>()),
+  warp_no_rollpitch(boost::make_shared<WarpNoRollPitch>()),
   T_b_f_offset(PoseEstimator::tformT::Identity()),
   T_b_f_offset_locked(false) {
   if (scene_) {
@@ -445,7 +448,18 @@ float PoseEstimator::do_icp() {
   icp.setUseReciprocalCorrespondences(icp_use_reciprocal_corr);
   icp.setEuclideanFitnessEpsilon(1e-12);
   icp.setTransformationEpsilon(1e-12);
-  if (icp_no_rotation) icp.setTransformationEstimation(te_2D_icp);
+
+  // decide the ICP degrees of freedom
+  if (icp_no_rollpitch && !icp_symmetric_object) {
+    te_lm->setWarpFunction(warp_no_rollpitch);
+    icp.setTransformationEstimation(te_lm);
+  } else if (icp_no_rollpitch && icp_symmetric_object) {
+    te_lm->setWarpFunction(warp_no_rotation);
+    icp.setTransformationEstimation(te_lm);
+  } else if (!icp_no_rollpitch && icp_symmetric_object) {
+    te_lm->setWarpFunction(warp_no_azim);
+    icp.setTransformationEstimation(te_lm);
+  }
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);
@@ -481,7 +495,8 @@ float PoseEstimator::do_auto_icp() {
   float y_min(0.f), y_max(0.f), y_step(2.f);
   float z_min(0.f), z_max(0.f), z_step(1.f);
   float azim_step(45.f);
-  for (float azim=0; azim<360.f; azim+=azim_step) {
+  float azim_max = icp_symmetric_object ? azim_step/2.f: 360.f;
+  for (float azim=0; azim<azim_max; azim+=azim_step) {
     object_init_azim = azim;
     for (float x=x_min/100.f; x<=x_max/100.f; x+=x_step/100.f) {
       object_init_dx = x;

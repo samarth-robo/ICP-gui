@@ -459,7 +459,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="icp_no_rotation_checkbox">
+        <widget class="QCheckBox" name="icp_no_rollpitch_checkbox">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -467,7 +467,14 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>no rotation</string>
+          <string>no roll/pitch</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="icp_symmetric_object_checkbox">
+         <property name="text">
+          <string>symmetric object</string>
          </property>
         </widget>
        </item>

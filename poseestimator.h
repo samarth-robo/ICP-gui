@@ -1,10 +1,11 @@
 #ifndef POSEESTIMATOR_H
 #define POSEESTIMATOR_H
 
+#include "warp_functions.h"
 #include "pcl_includes.h"
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/registration/icp.h>
-#include <pcl/registration/transformation_estimation_2D.h>
+#include <pcl/registration/transformation_estimation_lm.h>
 
 class PoseEstimator
 {
@@ -33,7 +34,8 @@ public:
   void set_icp_corr_dist(float s)    {icp_max_corr_distance = s;}
   void set_forced_object_scale(float s) {forced_object_scale = s;}
   void set_icp_use_recip_corr(bool s){icp_use_reciprocal_corr = s;}
-  void set_icp_no_rotation(bool s)   {icp_no_rotation = s;}
+  void set_icp_no_rollpitch(bool s)  {icp_no_rollpitch = s;}
+  void set_icp_symmetric_object(bool s)  {icp_symmetric_object = s;}
   void set_height_adjust(float s)    {height_adjust = s;}
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
@@ -66,7 +68,8 @@ public:
   float get_forced_object_scale(){return forced_object_scale;}
   float get_height_adjust()      {return height_adjust;}
   bool  get_icp_use_recip_corr() {return icp_use_reciprocal_corr;}
-  bool  get_icp_no_rotation() {return icp_no_rotation;}
+  bool  get_icp_no_rollpitch()   {return icp_no_rollpitch;}
+  bool  get_icp_symmetric_object()   {return icp_symmetric_object;}
   char  get_scale_axis()         {return scale_axis;}
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
@@ -102,7 +105,7 @@ private:
   object_init_dx, object_init_dy, object_init_dz;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
-  bool icp_use_reciprocal_corr, icp_no_rotation;
+  bool icp_use_reciprocal_corr, icp_no_rollpitch, icp_symmetric_object;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;
@@ -120,9 +123,15 @@ private:
   tformT T_b_f, T_c_b, T_f_o, T_icp, T_b_f_offset;  // needed for pose suggestions
   bool T_b_f_offset_locked;
   float white_thresh;  // color threshold for white object segmentation
-  // transformation estimation object for only (x, y, theta) ICP
-  typedef pcl::registration::TransformationEstimation2D<PointT, PointT> TE2D;
-  TE2D::Ptr te_2D_icp;
+  // objects for restricting ICP degrees of freedom
+  typedef pcl::registration::TransformationEstimationLM<PointT, PointT> TELM;
+  TELM::Ptr te_lm;
+  typedef pcl::registration::WarpPointNoAzim<PointT, PointT> WarpNoAzim;
+  WarpNoAzim::Ptr warp_no_azim;
+  typedef pcl::registration::WarpPointNoRotation<PointT, PointT> WarpNoRotation;
+  WarpNoRotation::Ptr warp_no_rotation;
+  typedef pcl::registration::WarpPointNoRollPitch<PointT, PointT> WarpNoRollPitch;
+  WarpNoRollPitch::Ptr warp_no_rollpitch;
 };
 
 

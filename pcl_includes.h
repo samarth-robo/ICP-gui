@@ -1,7 +1,6 @@
 #ifndef PCL_INCLUDES_H
 #define PCL_INCLUDES_H
 
-#endif // PCL_INCLUDES_H
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -10,3 +9,5 @@
 
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
+
+#endif // PCL_INCLUDES_H

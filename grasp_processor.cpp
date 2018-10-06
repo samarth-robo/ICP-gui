@@ -17,8 +17,9 @@ GraspProcessor::GraspProcessor(string data_dir) :
 }
 
 bool GraspProcessor::process_grasp(string object_name, string session_name,
-                                   bool restrict_rotation) {
-  if (restrict_rotation) cout << "## Rotation restricted" << endl;
+                                   bool no_rollpitch, bool symmetric_object) {
+  if (no_rollpitch) cout << "No roll/pitch" << endl;
+  if (symmetric_object) cout << "Symmetric object" << endl;
   // paths
   bfs::path base_dir = data_dir / session_name / object_name;
   bfs::path pc_dir = base_dir / "pointclouds";
@@ -137,7 +138,8 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_object_slide(object_slide_x, object_slide_y, object_slide_z);
 
   // process the views
-  pe->set_icp_no_rotation(restrict_rotation);
+  pe->set_icp_no_rollpitch(no_rollpitch);
+  pe->set_icp_symmetric_object(symmetric_object);
   for (int i=0; i<pc_filenames.size(); i++) {
     string pc_filename(pc_filenames[i].string());
     if (!process_view(pc_filename, base_dir)) {
@@ -145,7 +147,8 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
       return false;
     }
   }
-  pe->set_icp_no_rotation(false);
+  pe->set_icp_no_rollpitch(false);
+  pe->set_icp_symmetric_object(false);
   return true;
 }
 
