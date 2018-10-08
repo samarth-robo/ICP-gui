@@ -17,9 +17,13 @@ GraspProcessor::GraspProcessor(string data_dir) :
 }
 
 bool GraspProcessor::process_grasp(string object_name, string session_name,
-                                   bool no_rollpitch, bool symmetric_object) {
+                                   bool no_rollpitch, bool symmetric_object,
+                                   float azim_search_range) {
   if (no_rollpitch) cout << "No roll/pitch" << endl;
   if (symmetric_object) cout << "Symmetric object" << endl;
+  if (azim_search_range != 360.f)
+    cout << "Azimuth search range " << -azim_search_range/2.f << " : "
+         << azim_search_range/2.f << endl;
   // paths
   bfs::path base_dir = data_dir / session_name / object_name;
   bfs::path pc_dir = base_dir / "pointclouds";
@@ -140,6 +144,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   // process the views
   pe->set_icp_no_rollpitch(no_rollpitch);
   pe->set_icp_symmetric_object(symmetric_object);
+  pe->set_azim_search_range(azim_search_range);
   for (int i=0; i<pc_filenames.size(); i++) {
     string pc_filename(pc_filenames[i].string());
     if (!process_view(pc_filename, base_dir)) {
@@ -149,6 +154,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   }
   pe->set_icp_no_rollpitch(false);
   pe->set_icp_symmetric_object(false);
+  pe->set_azim_search_range(360.f);
   return true;
 }
 

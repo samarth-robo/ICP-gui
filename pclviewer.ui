@@ -441,6 +441,35 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QLabel" name="icp_azim_range_line_edit_label">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>azim. range</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="icp_azim_range_line_edit">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>60</width>
+           <height>16777215</height>
+          </size>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
      <item>
@@ -454,7 +483,7 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>reciprocal correspondences</string>
+          <string>reciprocal corrs.</string>
          </property>
         </widget>
        </item>

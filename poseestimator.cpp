@@ -39,7 +39,9 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
   warp_no_rollpitch(boost::make_shared<WarpNoRollPitch>()),
   T_b_f_offset(PoseEstimator::tformT::Identity()),
-  T_b_f_offset_locked(false) {
+  T_b_f_offset_locked(false),
+  azim_search_range(360.f),
+  azim_search_step(45.f) {
   if (scene_) {
     scene = scene_;
     scene_vox.setInputCloud(scene);
@@ -316,9 +318,9 @@ void PoseEstimator::set_object_flip_angles(float rx, float ry, float rz) {
   object_flip_angles[1] = ry * M_PI / 180.f;
   object_flip_angles[2] = rz * M_PI / 180.f;
   Eigen::Matrix3f R;
-  R = Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX())
+  R = Eigen::AngleAxisf(object_flip_angles[2], Eigen::Vector3f::UnitZ())
     * Eigen::AngleAxisf(object_flip_angles[1], Eigen::Vector3f::UnitY())
-    * Eigen::AngleAxisf(object_flip_angles[2], Eigen::Vector3f::UnitZ());
+    * Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX());
   object_flip.block<3, 3>(0, 0) = R;
 }
 
@@ -494,9 +496,9 @@ float PoseEstimator::do_auto_icp() {
   float x_min(0.f), x_max(0.f), x_step(2.f);
   float y_min(0.f), y_max(0.f), y_step(2.f);
   float z_min(0.f), z_max(0.f), z_step(1.f);
-  float azim_step(45.f);
-  float azim_max = icp_symmetric_object ? azim_step/2.f: 360.f;
-  for (float azim=0; azim<azim_max; azim+=azim_step) {
+  float azim_min = -azim_search_step * floor(azim_search_range/2.f/azim_search_step);
+  float azim_max = +azim_search_step * floor(azim_search_range/2.f/azim_search_step);
+  for (float azim=azim_min; azim<azim_max+FLT_EPSILON; azim+=azim_search_step) {
     object_init_azim = azim;
     for (float x=x_min/100.f; x<=x_max/100.f; x+=x_step/100.f) {
       object_init_dx = x;

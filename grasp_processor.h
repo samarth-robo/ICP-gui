@@ -12,7 +12,8 @@ class GraspProcessor
 public:
   GraspProcessor(std::string data_dir);
   bool process_grasp(std::string object_name, std::string session_name,
-                     bool no_rollpitch, bool symmetric_object);
+                     bool no_rollpitch, bool symmetric_object,
+                     float azim_search_range);
 
 private:
   PointCloudT::Ptr scene_cloud, object_cloud;

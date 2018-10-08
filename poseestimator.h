@@ -42,6 +42,8 @@ public:
   void set_object(PointCloudT::Ptr const &p);
   void set_tt_pose(const tformT &T);
   void set_object_flip_angles(float rx, float ry, float rz);
+  void set_azim_search_range(float s) {azim_search_range = s;}
+  void set_azim_search_step(float s)  {azim_search_step = s;}
   void set_object_slide(float tx, float ty, float tz) {
     object_flip(0, 3) = tx / 100.f;
     object_flip(1, 3) = ty / 100.f;
@@ -71,6 +73,8 @@ public:
   bool  get_icp_no_rollpitch()   {return icp_no_rollpitch;}
   bool  get_icp_symmetric_object()   {return icp_symmetric_object;}
   char  get_scale_axis()         {return scale_axis;}
+  float get_azim_search_range()  {return azim_search_range;}
+  float get_azim_search_step()   {return azim_search_step;}
   PointCloudT::ConstPtr get_processed_scene() {return scene_processed;}
   PointCloudT::ConstPtr get_processed_object();
   PointCloudT::ConstPtr get_scene() {return scene;}
@@ -123,6 +127,7 @@ private:
   tformT T_b_f, T_c_b, T_f_o, T_icp, T_b_f_offset;  // needed for pose suggestions
   bool T_b_f_offset_locked;
   float white_thresh;  // color threshold for white object segmentation
+  float azim_search_range, azim_search_step;
   // objects for restricting ICP degrees of freedom
   typedef pcl::registration::TransformationEstimationLM<PointT, PointT> TELM;
   TELM::Ptr te_lm;

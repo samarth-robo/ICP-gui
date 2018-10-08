@@ -82,6 +82,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_no_rollpitch_clicked);
   connect(ui->icp_symmetric_object_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_symmetric_object_clicked);
+  connect(ui->icp_azim_range_line_edit, &QLineEdit::textEdited, this,
+          &PCLViewer::icp_azim_range_changed);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
           &PCLViewer::scene_process_clicked);
   connect(ui->scene_estimate_plane_button, &QAbstractButton::clicked, this,
@@ -130,6 +132,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->object_init_azimuth_line_edit->setText(s);
   s.setNum(pe->get_icp_outlier_dist());
   ui->icp_outlier_dist_line_edit->setText(s);
+  s.setNum(pe->get_azim_search_range());
+  ui->icp_azim_range_line_edit->setText(s);
   s.setNum(pe->get_icp_corr_dist());
   ui->icp_corr_dist_line_edit->setText(s);
   ui->icp_recip_corr_checkbox->setChecked(pe->get_icp_use_recip_corr());
@@ -381,6 +385,18 @@ void PCLViewer::icp_symmetric_object_clicked(int state) {
     break;
   default:
     cout << "Wrong state of checkbox!" << endl;
+  }
+}
+
+void PCLViewer::icp_azim_range_changed(const QString &t) {
+  bool ok = false;
+  float s = t.toFloat(&ok);
+  if (ok) {
+    pe->set_azim_search_range(s);
+    cout << "Set azimuth search range to " << s << endl;
+  } else {
+    cout << "ERROR: wrong azimuth search range adjustment " << t.toStdString()
+         << endl;
   }
 }
 
