@@ -40,6 +40,7 @@ public slots:
     void icp_recip_corr_clicked(int state);
     void icp_no_rollpitch_clicked(int state);
     void icp_symmetric_object_clicked(int state);
+    void icp_only_xy_clicked(int state);
     void icp_azim_range_changed(const QString &t);
     void scene_estimate_plane_clicked(bool checked);
     void scene_save_plane_clicked(bool checked);

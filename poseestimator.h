@@ -36,6 +36,7 @@ public:
   void set_icp_use_recip_corr(bool s){icp_use_reciprocal_corr = s;}
   void set_icp_no_rollpitch(bool s)  {icp_no_rollpitch = s;}
   void set_icp_symmetric_object(bool s)  {icp_symmetric_object = s;}
+  void set_icp_only_xy(bool s)       {icp_only_xy = s;}
   void set_height_adjust(float s)    {height_adjust = s;}
   void set_scale_axis(char a)        {scale_axis = a;}
   void set_scene(PointCloudT::Ptr const &p);
@@ -72,6 +73,7 @@ public:
   bool  get_icp_use_recip_corr() {return icp_use_reciprocal_corr;}
   bool  get_icp_no_rollpitch()   {return icp_no_rollpitch;}
   bool  get_icp_symmetric_object()   {return icp_symmetric_object;}
+  bool  get_icp_only_xy()        {return icp_only_xy;}
   char  get_scale_axis()         {return scale_axis;}
   float get_azim_search_range()  {return azim_search_range;}
   float get_azim_search_step()   {return azim_search_step;}
@@ -93,7 +95,7 @@ public:
   bool write_pose_file(std::string pose_filename, std::string scale_filename);
   bool write_tt_file(std::string tt_base_filename);
   bool write_segmented_object(std::string filename);
-  bool estimate_plane_params();
+  bool estimate_plane_params(std::string from_file=std::string());
   bool set_T_b_f(std::string filename);
 
 private:
@@ -109,7 +111,8 @@ private:
   object_init_dx, object_init_dy, object_init_dz;
   float icp_outlier_rejection_thresh, icp_max_corr_distance;
   size_t icp_n_iters;
-  bool icp_use_reciprocal_corr, icp_no_rollpitch, icp_symmetric_object;
+  bool icp_use_reciprocal_corr, icp_no_rollpitch, icp_symmetric_object,
+  icp_only_xy;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;
@@ -137,6 +140,8 @@ private:
   WarpNoRotation::Ptr warp_no_rotation;
   typedef pcl::registration::WarpPointNoRollPitch<PointT, PointT> WarpNoRollPitch;
   WarpNoRollPitch::Ptr warp_no_rollpitch;
+  typedef pcl::registration::WarpPointXY<PointT, PointT> WarpXY;
+  WarpXY::Ptr warp_xy;
 };
 
 

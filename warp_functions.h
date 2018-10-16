@@ -8,6 +8,39 @@ namespace pcl
 {
   namespace registration
   {
+    /** \brief @b Only XY
+      */
+    template <typename PointSourceT, typename PointTargetT, typename Scalar = float>
+    class WarpPointXY : public WarpPointRigid<PointSourceT, PointTargetT, Scalar>
+    {
+      public:
+        typedef typename WarpPointRigid<PointSourceT, PointTargetT, Scalar>::Matrix4 Matrix4;
+        typedef typename WarpPointRigid<PointSourceT, PointTargetT, Scalar>::VectorX VectorX;
+
+        typedef boost::shared_ptr<WarpPointXY<PointSourceT, PointTargetT, Scalar> > Ptr;
+        typedef boost::shared_ptr<const WarpPointXY<PointSourceT, PointTargetT, Scalar> > ConstPtr;
+
+        /** \brief Constructor. */
+        WarpPointXY () : WarpPointRigid<PointSourceT, PointTargetT, Scalar> (2) {}
+
+        /** \brief Empty destructor */
+        virtual ~WarpPointXY () {}
+
+        /** \brief Set warp parameters.
+          * \param[in] p warp parameters (tx ty)
+          */
+        virtual void
+        setParam (const VectorX & p)
+        {
+          assert (p.rows () == this->getDimension ());
+          Matrix4 &trans = this->transform_matrix_;
+
+          trans = Matrix4::Identity();
+          // Copy the rotation and translation components
+          trans.block (0, 3, 2, 1) = Eigen::Matrix<Scalar, 2, 1> (p[0], p[1]);
+        }
+    };
+
     /** \brief @b No rotation
       */
     template <typename PointSourceT, typename PointTargetT, typename Scalar = float>

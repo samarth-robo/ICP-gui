@@ -20,9 +20,9 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_boxsize_x(0.3f), scene_boxsize_y(0.3f), scene_boxsize_z(0.3f),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
-  icp_n_iters(50), icp_outlier_rejection_thresh(0.005),
+  icp_n_iters(200), icp_outlier_rejection_thresh(0.005),
   icp_max_corr_distance(0.02), icp_use_reciprocal_corr(false),
-  icp_no_rollpitch(false), icp_symmetric_object(false),
+  icp_no_rollpitch(false), icp_symmetric_object(false), icp_only_xy(false),
   scale_axis('z'),
   object_adj_pos(PoseEstimator::tformT::Identity()),
   object_adj_rot(PoseEstimator::tformT::Identity()),
@@ -38,6 +38,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   warp_no_azim(boost::make_shared<WarpNoAzim>()),
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
   warp_no_rollpitch(boost::make_shared<WarpNoRollPitch>()),
+  warp_xy(boost::make_shared<WarpXY>()),
   T_b_f_offset(PoseEstimator::tformT::Identity()),
   T_b_f_offset_locked(false),
   azim_search_range(360.f),
@@ -149,24 +150,55 @@ bool PoseEstimator::set_T_b_f(std::string filename) {
   return true;
 }
 
-bool PoseEstimator::estimate_plane_params() {
+bool PoseEstimator::estimate_plane_params(std::string from_filename) {
   // estimate the plane
   // console::print_info("Estimating plane...");
-  PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
-  SACSegmentation<PointT> plane_seg;
-  plane_seg.setOptimizeCoefficients(true);
-  plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
-  plane_seg.setMethodType(SAC_RANSAC);
-  plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
-  plane_seg.setMaxIterations(1e6);
-  plane_seg.setAxis(tt_axis);
-  plane_seg.setEpsAngle(10 * M_PI/180.0);
-  plane_seg.setInputCloud(scene_cropped_subsampled);
-  plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
-  if (plane_inliers->indices.size() == 0) {
-    console::print_error("No plane found in the scene.");
-    return false;
-  } // else console::print_info("done.\n");
+  if (!from_filename.empty()) {  // take plane estimate from the file
+    ifstream f(from_filename);
+    if (f.is_open()) {
+      std::string line;
+      getline(f, line);
+      getline(f, line);
+      std::stringstream ss(line);
+      ss >> scene_plane_coeffs->values[0];
+      ss >> scene_plane_coeffs->values[1];
+      ss >> scene_plane_coeffs->values[2];
+      ss >> scene_plane_coeffs->values[3];
+    } else {
+      console::print_error("Could not open %s for reading, estimating plane",
+                           from_filename.c_str());
+      return false;
+    }
+  } else {  // estimate plane by RANSAC
+    PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
+    SACSegmentation<PointT> plane_seg;
+    plane_seg.setOptimizeCoefficients(true);
+    plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
+    plane_seg.setMethodType(SAC_RANSAC);
+    plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
+    plane_seg.setMaxIterations(1e6);
+    plane_seg.setAxis(tt_axis);
+    plane_seg.setEpsAngle(10 * M_PI/180.0);
+    // keep only non-white points for better plane estimate
+    PointIndicesPtr idx = boost::make_shared<PointIndices>();
+    for (int i=0; i<scene_cropped_subsampled->size(); i++) {
+      const auto &p = scene_cropped_subsampled->at(i);
+      float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
+      if (gray < white_thresh) idx->indices.push_back(i);
+    }
+    ExtractIndices<PointT> extract;
+    extract.setInputCloud(scene_cropped_subsampled);
+    extract.setNegative(false);
+    extract.setIndices(idx);
+    PointCloudT::Ptr tt_points = boost::make_shared<PointCloudT>();
+    extract.filter(*tt_points);
+    plane_seg.setInputCloud(tt_points);
+    plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
+    if (plane_inliers->indices.size() == 0) {
+      console::print_error("No plane found in the scene.");
+      return false;
+    } // else console::print_info("done with %d points\n", tt_points->size());
+  }
 
   // flip the plane normal if needed
   Eigen::Vector3f n(scene_plane_coeffs->values[0], scene_plane_coeffs->values[1],
@@ -251,12 +283,12 @@ void PoseEstimator::process_scene() {
   transformPointCloud(*scene_plane_hull_points, *hull_aligned, T);
 
   // segment object sticking out of the plane
-  ExtractPolygonalPrismData<PointT> prism;
   PointIndicesPtr idx = boost::make_shared<PointIndices>();
+  ExtractIndices<PointT> extract;
+  ExtractPolygonalPrismData<PointT> prism;
   prism.setViewPoint(0, 0, 1);
   prism.setInputCloud(scene_aligned);
   prism.setInputPlanarHull(hull_aligned);
-  ExtractIndices<PointT> extract;
   extract.setInputCloud(scene_aligned);
   extract.setNegative(false);
 
@@ -282,11 +314,11 @@ void PoseEstimator::process_scene() {
   transformPointCloud(*scene_processed, *scene_processed, T_fudge);
 
   // remove noise
-  // StatisticalOutlierRemoval<PointT> sor;
-  // sor.setInputCloud(scene_processed);
-  // sor.setMeanK(5);
-  // sor.setStddevMulThresh(3);
-  // sor.filter(*scene_processed);
+  StatisticalOutlierRemoval<PointT> sor;
+  sor.setInputCloud(scene_processed);
+  sor.setMeanK(20);
+  sor.setStddevMulThresh(1.5);
+  sor.filter(*scene_processed);
 
   // save the segmented object
   copyPointCloud(*scene_processed, *scene_object_segmented);
@@ -452,7 +484,10 @@ float PoseEstimator::do_icp() {
   icp.setTransformationEpsilon(1e-12);
 
   // decide the ICP degrees of freedom
-  if (icp_no_rollpitch && !icp_symmetric_object) {
+  if (icp_only_xy) {
+    te_lm->setWarpFunction(warp_xy);
+    icp.setTransformationEstimation(te_lm);
+  } else if (icp_no_rollpitch && !icp_symmetric_object) {
     te_lm->setWarpFunction(warp_no_rollpitch);
     icp.setTransformationEstimation(te_lm);
   } else if (icp_no_rollpitch && icp_symmetric_object) {
@@ -495,10 +530,10 @@ float PoseEstimator::do_auto_icp() {
   // cm
   float x_min(0.f), x_max(0.f), x_step(2.f);
   float y_min(0.f), y_max(0.f), y_step(2.f);
-  float z_min(0.f), z_max(0.f), z_step(1.f);
+  float z_min(0.f), z_max(0.f), z_step(2.f);
   float azim_min = -azim_search_step * floor(azim_search_range/2.f/azim_search_step);
   float azim_max = +azim_search_step * floor(azim_search_range/2.f/azim_search_step);
-  for (float azim=azim_min; azim<azim_max+FLT_EPSILON; azim+=azim_search_step) {
+  for (float azim=azim_min; azim<=azim_max; azim+=azim_search_step) {
     object_init_azim = azim;
     for (float x=x_min/100.f; x<=x_max/100.f; x+=x_step/100.f) {
       object_init_dx = x;

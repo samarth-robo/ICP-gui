@@ -82,6 +82,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
           &PCLViewer::icp_no_rollpitch_clicked);
   connect(ui->icp_symmetric_object_checkbox, &QCheckBox::stateChanged, this,
           &PCLViewer::icp_symmetric_object_clicked);
+  connect(ui->icp_only_xy_checkbox, &QCheckBox::stateChanged, this,
+          &PCLViewer::icp_only_xy_clicked);
   connect(ui->icp_azim_range_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::icp_azim_range_changed);
   connect(ui->scene_process_button, &QAbstractButton::clicked, this,
@@ -382,6 +384,21 @@ void PCLViewer::icp_symmetric_object_clicked(int state) {
   case Qt::Checked:
     pe->set_icp_symmetric_object(true);
     cout << "Object is symmetric" << endl;
+    break;
+  default:
+    cout << "Wrong state of checkbox!" << endl;
+  }
+}
+
+void PCLViewer::icp_only_xy_clicked(int state) {
+  switch (state) {
+  case Qt::Unchecked:
+    pe->set_icp_only_xy(false);
+    cout << "ICP will not estimate only XY" << endl;
+    break;
+  case Qt::Checked:
+    pe->set_icp_only_xy(true);
+    cout << "ICP will estimate only XY" << endl;
     break;
   default:
     cout << "Wrong state of checkbox!" << endl;

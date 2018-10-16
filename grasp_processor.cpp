@@ -13,17 +13,25 @@ GraspProcessor::GraspProcessor(string data_dir) :
   pe(new PoseEstimator()),
   plane_locked(false) {
   // init the random number generator
-  std::srand(std::time(0));
+  std::srand(std::time(NULL));
 }
 
 bool GraspProcessor::process_grasp(string object_name, string session_name,
                                    bool no_rollpitch, bool symmetric_object,
-                                   float azim_search_range) {
+                                   bool only_xy, float azim_search_range,
+                                   string plane_from) {
   if (no_rollpitch) cout << "No roll/pitch" << endl;
   if (symmetric_object) cout << "Symmetric object" << endl;
+  if (only_xy) cout << "Only XY" << endl;
   if (azim_search_range != 360.f)
     cout << "Azimuth search range " << -azim_search_range/2.f << " : "
          << azim_search_range/2.f << endl;
+  if (!plane_from.empty()) {
+    cout << "Getting plane estimate from " << plane_from << endl;
+    bfs::path p = data_dir / session_name / plane_from / "poses"
+        / "tt_base_processed.txt";
+    plane_from_filename = p.string();
+  } else plane_from_filename = string();
   // paths
   bfs::path base_dir = data_dir / session_name / object_name;
   bfs::path pc_dir = base_dir / "pointclouds";
@@ -100,7 +108,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
               object_name_filename.string().c_str());
     return false;
   }
-  cout << "Object name is " << real_object_name << endl;
+  // cout << "Object name is " << real_object_name << endl;
 
   // read init XYZ info from txt file
   bfs::path tt_base_filename = base_dir / "poses" / "tt_base.txt";
@@ -145,6 +153,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_icp_no_rollpitch(no_rollpitch);
   pe->set_icp_symmetric_object(symmetric_object);
   pe->set_azim_search_range(azim_search_range);
+  pe->set_icp_only_xy(only_xy);
   for (int i=0; i<pc_filenames.size(); i++) {
     string pc_filename(pc_filenames[i].string());
     if (!process_view(pc_filename, base_dir)) {
@@ -155,6 +164,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_icp_no_rollpitch(false);
   pe->set_icp_symmetric_object(false);
   pe->set_azim_search_range(360.f);
+  pe->set_icp_only_xy(false);
   return true;
 }
 
@@ -192,7 +202,7 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
   // estimate plane
   bool plane_estimated(false);
   if (!plane_locked) {
-    if (!pe->estimate_plane_params()) {
+    if (!pe->estimate_plane_params(plane_from_filename)) {
       cout << "WARN: Could not estimate plane" << endl;
       return false;
     }
