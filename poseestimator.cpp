@@ -39,6 +39,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
   warp_no_rollpitch(boost::make_shared<WarpNoRollPitch>()),
   warp_xy(boost::make_shared<WarpXY>()),
+  warp_6d(boost::make_shared<Warp6D>()),
   T_b_f_offset(PoseEstimator::tformT::Identity()),
   T_b_f_offset_locked(false),
   azim_search_range(360.f),
@@ -160,6 +161,7 @@ bool PoseEstimator::estimate_plane_params(std::string from_filename) {
       getline(f, line);
       getline(f, line);
       std::stringstream ss(line);
+      scene_plane_coeffs->values.resize(4);
       ss >> scene_plane_coeffs->values[0];
       ss >> scene_plane_coeffs->values[1];
       ss >> scene_plane_coeffs->values[2];
@@ -486,17 +488,16 @@ float PoseEstimator::do_icp() {
   // decide the ICP degrees of freedom
   if (icp_only_xy) {
     te_lm->setWarpFunction(warp_xy);
-    icp.setTransformationEstimation(te_lm);
   } else if (icp_no_rollpitch && !icp_symmetric_object) {
     te_lm->setWarpFunction(warp_no_rollpitch);
-    icp.setTransformationEstimation(te_lm);
   } else if (icp_no_rollpitch && icp_symmetric_object) {
     te_lm->setWarpFunction(warp_no_rotation);
-    icp.setTransformationEstimation(te_lm);
   } else if (!icp_no_rollpitch && icp_symmetric_object) {
     te_lm->setWarpFunction(warp_no_azim);
-    icp.setTransformationEstimation(te_lm);
+  } else {
+    te_lm->setWarpFunction(warp_6d);
   }
+  icp.setTransformationEstimation(te_lm);
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);

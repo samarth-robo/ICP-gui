@@ -208,7 +208,7 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
     }
     plane_estimated = true;
     // cout << "Plane estimated" << endl;
-    bfs::path tt_base_filename = base_dir / "poses" / "tt_base.txt";
+    bfs::path tt_base_filename = base_dir / "poses" / "tt_base_processed.txt";
     if (pe->write_tt_file(tt_base_filename.string())) {
       plane_locked = true;
       // cout << tt_base_filename.string() << " written" << endl;

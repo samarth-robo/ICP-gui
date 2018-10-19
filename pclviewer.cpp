@@ -3,6 +3,7 @@
 #include "mesh_sample.h"
 #include <iostream>
 #include <cstdlib>
+#include <random>
 
 #include <pcl/io/pcd_io.h>
 #include <QLineEdit>
@@ -24,6 +25,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   pe(new PoseEstimator()), plane_estimated(false), plane_locked(false),
   scene_processed(false), object_processed(false), icp_initialized(false),
   root_dir("../data/"), scene_filename("scene.pcd") {
+  srand(time(NULL));
   ui->setupUi(this);
   this->setWindowTitle("ICP GUI");
 
@@ -599,14 +601,34 @@ void PCLViewer::dir_select_clicked(bool checked) {
   ui->object_z_line_edit->setText(s);
 
   // refresh combo-box and populate with list of pcds in directory
+  // read the names of views to be excluded
+  bfs::path views_filename = bfs::path(root_dir) / "excluded_views.txt";
+  f.open(views_filename.string());
+  if (!f.is_open()) {
+    PCL_ERROR("Could not open %s for reading\n", views_filename.string().c_str());
+  }
+  string pc_id;
+  vector<string> excluded_ids;
+  while (f >> pc_id) excluded_ids.push_back(pc_id);
+  f.close();
+
   QComboBox *cb = ui->scene_select_combo_box;
   cb->clear();
   bfs::path root(root_dir+string("/pointclouds"));
   if (bfs::is_directory(root)) {
     vector<string> filenames;
     for (auto it : bfs::directory_iterator(root)) {
+      bool excluded(false);
+      for (const auto &e_id: excluded_ids) {
+        if (it.path().stem().string().find(e_id) != string::npos) {
+          excluded = true;
+          break;
+        }
+      }
+      if (it.path().stem().string().find("segmented_object") != string::npos)
+        excluded = true;
+      if (excluded) continue;
       string filename = it.path().filename().string();
-      if (filename.find("segmented") != string::npos) continue;
       filenames.push_back(filename);
       cout << "Found " << filename << endl;
     }

@@ -142,6 +142,8 @@ private:
   WarpNoRollPitch::Ptr warp_no_rollpitch;
   typedef pcl::registration::WarpPointXY<PointT, PointT> WarpXY;
   WarpXY::Ptr warp_xy;
+  typedef pcl::registration::WarpPoint6D<PointT, PointT> Warp6D;
+  Warp6D::Ptr warp_6d;
 };
 
 
