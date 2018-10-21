@@ -462,13 +462,13 @@ void PoseEstimator::init_icp() {
   object_adj_rot(0, 1) = -s;
   object_adj_rot(1, 0) = s;
   object_adj_rot(1, 1) = c;
-  object_adj_pos(0, 3) = object_init_dx;
-  object_adj_pos(1, 3) = object_init_dy;
-  object_adj_pos(2, 3) = object_init_dz;
   PointXYZ offset = get_minpt_offset();
-  object_adj_pos(0, 3) += offset.x;
-  object_adj_pos(1, 3) += offset.y;
-  object_adj_pos(2, 3) += offset.z;
+  object_adj_pos(0, 3) = offset.x;
+  object_adj_pos(1, 3) = offset.y;
+  object_adj_pos(2, 3) = offset.z;
+  object_adj_pos(0, 3) += object_init_dx;
+  object_adj_pos(1, 3) += object_init_dy;
+  object_adj_pos(2, 3) += object_init_dz;
 }
 
 // do ICP
@@ -531,7 +531,7 @@ float PoseEstimator::do_auto_icp() {
   // cm
   float x_min(0.f), x_max(0.f), x_step(2.f);
   float y_min(0.f), y_max(0.f), y_step(2.f);
-  float z_min(0.f), z_max(0.f), z_step(2.f);
+  float z_min(-2.f), z_max(2.f), z_step(2.f);
   float azim_min = -azim_search_step * floor(azim_search_range/2.f/azim_search_step);
   float azim_max = +azim_search_step * floor(azim_search_range/2.f/azim_search_step);
   for (float azim=azim_min; azim<=azim_max; azim+=azim_search_step) {
