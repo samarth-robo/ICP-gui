@@ -242,6 +242,19 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QCheckBox" name="scene_distorted_checkbox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>distorted</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
      <item>
@@ -509,7 +522,7 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>symmetric object</string>
+          <string>symmetric</string>
          </property>
         </widget>
        </item>
@@ -645,7 +658,7 @@
           </size>
          </property>
          <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;object azimuth (deg)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;azimuth (deg)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
         </widget>
        </item>

@@ -13,7 +13,7 @@ public:
   GraspProcessor(std::string data_dir);
   bool process_grasp(std::string object_name, std::string session_name,
                      bool no_rollpitch, bool symmetric_object, bool only_xy,
-                     float azim_search_range,
+                     float azim_search_range, bool scene_distorted,
                      std::string plane_from=std::string());
 
 private:

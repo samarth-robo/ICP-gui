@@ -52,6 +52,8 @@ PCLViewer::PCLViewer(QWidget *parent) :
   // make signal-slot connections
   connect(ui->scene_leaf_size_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::scene_leaf_size_changed);
+  connect(ui->scene_distorted_checkbox, &QCheckBox::stateChanged, this,
+          &PCLViewer::scene_distorted_clicked);
   connect(ui->object_leaf_size_line_edit, &QLineEdit::textEdited, this,
           &PCLViewer::object_leaf_size_changed);
   connect(ui->object_x_line_edit, &QLineEdit::textEdited, this,
@@ -143,6 +145,7 @@ PCLViewer::PCLViewer(QWidget *parent) :
   ui->icp_recip_corr_checkbox->setChecked(pe->get_icp_use_recip_corr());
   ui->icp_no_rollpitch_checkbox->setChecked(pe->get_icp_no_rollpitch());
   ui->icp_symmetric_object_checkbox->setChecked(pe->get_icp_symmetric_object());
+  ui->scene_distorted_checkbox->setChecked(pe->get_scene_distorted());
 }
 
 PCLViewer::~PCLViewer() {
@@ -192,6 +195,21 @@ void PCLViewer::scene_leaf_size_changed(const QString &t) {
     cout << "Set scene leaf size to " << s << endl;
   } else {
     cout << "ERROR: wrong scene leaf size " << t.toStdString() << endl;
+  }
+}
+
+void PCLViewer::scene_distorted_clicked(int state) {
+  switch (state) {
+  case Qt::Unchecked:
+    pe->set_scene_distorted(false);
+    cout << "Scene is not distorted" << endl;
+    break;
+  case Qt::Checked:
+    pe->set_scene_distorted(true);
+    cout << "Scene is distorted" << endl;
+    break;
+  default:
+    cout << "Wrong state of checkbox!" << endl;
   }
 }
 

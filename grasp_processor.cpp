@@ -19,7 +19,7 @@ GraspProcessor::GraspProcessor(string data_dir) :
 bool GraspProcessor::process_grasp(string object_name, string session_name,
                                    bool no_rollpitch, bool symmetric_object,
                                    bool only_xy, float azim_search_range,
-                                   string plane_from) {
+                                   bool scene_distorted, string plane_from) {
   if (no_rollpitch) cout << "No roll/pitch" << endl;
   if (symmetric_object) cout << "Symmetric object" << endl;
   if (only_xy) cout << "Only XY" << endl;
@@ -32,6 +32,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
         / "tt_base_processed.txt";
     plane_from_filename = p.string();
   } else plane_from_filename = string();
+  if (scene_distorted) cout << "Scene distorted" << endl;
   // paths
   bfs::path base_dir = data_dir / session_name / object_name;
   bfs::path pc_dir = base_dir / "pointclouds";
@@ -156,6 +157,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_icp_only_xy(only_xy);
   for (int i=0; i<pc_filenames.size(); i++) {
     string pc_filename(pc_filenames[i].string());
+    if (i > 0) pe->set_scene_distorted(scene_distorted);
     if (!process_view(pc_filename, base_dir)) {
       PCL_ERROR("Error processing view %s\n", pc_filename.c_str());
       return false;
@@ -165,6 +167,7 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_icp_symmetric_object(false);
   pe->set_azim_search_range(360.f);
   pe->set_icp_only_xy(false);
+  pe->set_scene_distorted(false);
   return true;
 }
 

@@ -45,6 +45,7 @@ public slots:
     void scene_estimate_plane_clicked(bool checked);
     void scene_save_plane_clicked(bool checked);
     void scene_process_clicked(bool checked);
+    void scene_distorted_clicked(int state);
     void object_process_clicked(bool checked);
     void icp_init_clicked(bool checked);
     void icp_process_clicked(bool checked);

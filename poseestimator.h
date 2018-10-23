@@ -23,6 +23,7 @@ public:
   void set_scene_boxsize_x(float s)  {scene_boxsize_x = s;}
   void set_scene_boxsize_y(float s)  {scene_boxsize_y = s;}
   void set_scene_boxsize_z(float s)  {scene_boxsize_z = s;}
+  void set_scene_distorted(bool s)   {scene_distorted = s;}
   void set_object_init_x(float s)    {object_init_x = s;}
   void set_object_init_y(float s)    {object_init_y = s;}
   void set_object_init_z(float s)    {object_init_z = s;}
@@ -57,6 +58,7 @@ public:
   float get_scene_boxsize_x()    {return scene_boxsize_x;}
   float get_scene_boxsize_y()    {return scene_boxsize_y;}
   float get_scene_boxsize_z()    {return scene_boxsize_z;}
+  bool  get_scene_distorted()    {return scene_distorted;}
   pcl::PointXYZ get_scene_box_min_pt();
   pcl::PointXYZ get_scene_box_max_pt();
   float get_object_init_x()      {return object_init_x;}
@@ -104,6 +106,13 @@ private:
   tformT get_tabletop_rot(Eigen::Vector3f obj_normal = Eigen::Vector3f(0, 0, 1));
   tformT invert_pose(tformT const &in);
   pcl::PointXYZ get_minpt_offset();
+  bool remove_scene_distortion();
+  bool estimate_perpendicular_plane(const PointCloudT::ConstPtr &in,
+    const Eigen::Vector3f &normal_axis,
+    pcl::ModelCoefficientsPtr coeffs=nullptr,
+    PointCloudT::Ptr plane_cloud=nullptr,
+    pcl::PointIndicesPtr plane_idx=nullptr,
+    float epsAngle=20*M_PI/180.f);
 
   float scene_leaf_size, object_leaf_size;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;
@@ -113,6 +122,7 @@ private:
   size_t icp_n_iters;
   bool icp_use_reciprocal_corr, icp_no_rollpitch, icp_symmetric_object,
   icp_only_xy;
+  bool scene_distorted;
   PointCloudT::ConstPtr scene, object;
   PointCloudT::Ptr scene_cropped_subsampled;
   PointCloudT::Ptr scene_processed, object_processed;

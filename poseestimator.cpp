@@ -11,6 +11,7 @@
 #include <pcl/registration/registration.h>
 
 #include <fstream>
+#include <math.h>
 
 using namespace pcl;
 
@@ -18,6 +19,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
                              PointCloudT::ConstPtr const &object_) :
   scene_leaf_size(0.001f), object_leaf_size(0.001f),
   scene_boxsize_x(0.3f), scene_boxsize_y(0.3f), scene_boxsize_z(0.3f),
+  scene_distorted(false),
   object_init_x(0.f), object_init_y(0.f), object_init_z(0.f),
   object_init_azim(0.f),
   icp_n_iters(200), icp_outlier_rejection_thresh(0.005),
@@ -270,6 +272,52 @@ int get_top_point(PointCloud<PointT>::Ptr &cloud) {
 }
 
 
+// esimates a plane perpendicular to axis
+bool PoseEstimator::estimate_perpendicular_plane(const PointCloudT::ConstPtr &in,
+                                  const Eigen::Vector3f &axis,
+                                  ModelCoefficientsPtr coeffs,
+                                  PointCloudT::Ptr plane_cloud,
+                                  PointIndicesPtr plane_idx,
+                                  float epsAngle) {
+  SACSegmentation<PointT> plane_seg;
+  plane_seg.setOptimizeCoefficients(true);
+  plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
+  plane_seg.setMethodType(SAC_RANSAC);
+  plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
+  plane_seg.setMaxIterations(1e6);
+  plane_seg.setAxis(axis);
+  plane_seg.setEpsAngle(epsAngle);
+  plane_seg.setInputCloud(in);
+  PointIndicesPtr plane_idx_ =
+      plane_idx ? plane_idx : boost::make_shared<PointIndices>();
+  ModelCoefficientsPtr coeffs_ =
+      coeffs ? coeffs : boost::make_shared<ModelCoefficients>();
+  plane_seg.segment(*plane_idx_, *coeffs_);
+  if (plane_idx_->indices.size() == 0) {
+    console::print_error("No plane found in the scene.");
+    return false;
+  }
+
+  if (!plane_cloud) return true;
+  ExtractIndices<PointT> extract;
+  extract.setInputCloud(in);
+  extract.setNegative(false);
+  extract.setIndices(plane_idx_);
+  extract.filter(*plane_cloud);
+  return true;
+}
+
+
+// fits a single plane to the scene and only keeps the inliers
+bool PoseEstimator::remove_scene_distortion() {
+  // Eigen::Vector3f plane_normal(1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
+  Eigen::Vector3f plane_normal(0, 1, 0);
+  float epsAngle(45.f*M_PI/180.f);
+  return estimate_perpendicular_plane(scene_processed, plane_normal, nullptr,
+                               scene_processed, nullptr, epsAngle);
+}
+
+
 void PoseEstimator::process_scene() {
   // assume cropping, subsampling and plane estimation is done
 
@@ -321,6 +369,9 @@ void PoseEstimator::process_scene() {
   sor.setMeanK(20);
   sor.setStddevMulThresh(1.5);
   sor.filter(*scene_processed);
+
+  // remove distortion
+  if (scene_distorted) remove_scene_distortion();
 
   // save the segmented object
   copyPointCloud(*scene_processed, *scene_object_segmented);
@@ -501,7 +552,6 @@ float PoseEstimator::do_icp() {
 
   PointCloudT::Ptr obj_aligned = boost::make_shared<PointCloudT>();
   icp.align(*obj_aligned);
-  tformT guess = tformT::Identity();
   if (true) {
     auto tree = icp.getSearchMethodTarget();
     float dist(0.f);
@@ -529,11 +579,16 @@ float PoseEstimator::do_auto_icp() {
   float prev_object_init_azim(object_init_azim), prev_object_init_dx(object_init_dx),
       prev_object_init_dy(object_init_dy), prev_object_init_dz(object_init_dz);
   // cm
-  float x_min(0.f), x_max(0.f), x_step(2.f);
-  float y_min(0.f), y_max(0.f), y_step(2.f);
-  float z_min(-2.f), z_max(2.f), z_step(2.f);
-  float azim_min = -azim_search_step * floor(azim_search_range/2.f/azim_search_step);
-  float azim_max = +azim_search_step * floor(azim_search_range/2.f/azim_search_step);
+  float x_min(prev_object_init_dx - 0.f), x_max(prev_object_init_dx + 0.f),
+      x_step(2.f);
+  float y_min(prev_object_init_dy - 0.f), y_max(prev_object_init_dy + 0.f),
+      y_step(2.f);
+  float z_min(prev_object_init_dz - 2.f), z_max(prev_object_init_dz + 2.f),
+      z_step(2.f);
+  float azim_min = prev_object_init_azim -
+      azim_search_step * floor(azim_search_range/2.f/azim_search_step);
+  float azim_max = prev_object_init_azim +
+      azim_search_step * floor(azim_search_range/2.f/azim_search_step);
   for (float azim=azim_min; azim<=azim_max; azim+=azim_search_step) {
     object_init_azim = azim;
     for (float x=x_min/100.f; x<=x_max/100.f; x+=x_step/100.f) {
