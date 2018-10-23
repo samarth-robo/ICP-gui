@@ -128,7 +128,7 @@ private:
   PointCloudT::Ptr scene_processed, object_processed;
   PointCloudT::Ptr scene_object_segmented;
   pcl::VoxelGrid<PointT> scene_vox, object_vox;
-  pcl::ModelCoefficientsPtr scene_plane_coeffs;
+  pcl::ModelCoefficientsPtr scene_plane_coeffs, distorted_object_plane_coeffs;
   PointCloudT::Ptr scene_plane_hull_points;
   tformT object_adj_pos, object_adj_rot, object_scale, object_flip;
   float axis_size;  // size of object along an axis in the scene

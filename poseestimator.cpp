@@ -62,6 +62,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   scene_plane_hull_points  = boost::make_shared<PointCloudT>();
   scene_object_segmented   = boost::make_shared<PointCloudT>();
   scene_plane_coeffs       = boost::make_shared<ModelCoefficients>();
+  distorted_object_plane_coeffs = boost::make_shared<ModelCoefficients>();
 }
 
 void PoseEstimator::set_scene(const PointCloudT::Ptr &p) {
@@ -153,6 +154,7 @@ bool PoseEstimator::set_T_b_f(std::string filename) {
   return true;
 }
 
+
 bool PoseEstimator::estimate_plane_params(std::string from_filename) {
   // estimate the plane
   // console::print_info("Estimating plane...");
@@ -174,15 +176,6 @@ bool PoseEstimator::estimate_plane_params(std::string from_filename) {
       return false;
     }
   } else {  // estimate plane by RANSAC
-    PointIndicesPtr plane_inliers = boost::make_shared<PointIndices>();
-    SACSegmentation<PointT> plane_seg;
-    plane_seg.setOptimizeCoefficients(true);
-    plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
-    plane_seg.setMethodType(SAC_RANSAC);
-    plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
-    plane_seg.setMaxIterations(1e6);
-    plane_seg.setAxis(tt_axis);
-    plane_seg.setEpsAngle(10 * M_PI/180.0);
     // keep only non-white points for better plane estimate
     PointIndicesPtr idx = boost::make_shared<PointIndices>();
     for (int i=0; i<scene_cropped_subsampled->size(); i++) {
@@ -196,12 +189,11 @@ bool PoseEstimator::estimate_plane_params(std::string from_filename) {
     extract.setIndices(idx);
     PointCloudT::Ptr tt_points = boost::make_shared<PointCloudT>();
     extract.filter(*tt_points);
-    plane_seg.setInputCloud(tt_points);
-    plane_seg.segment(*plane_inliers, *scene_plane_coeffs);
-    if (plane_inliers->indices.size() == 0) {
-      console::print_error("No plane found in the scene.");
+
+    if (!estimate_perpendicular_plane(tt_points, tt_axis, scene_plane_coeffs,
+                                      nullptr, nullptr, 10*M_PI/180.f)) {
       return false;
-    } // else console::print_info("done with %d points\n", tt_points->size());
+    }
   }
 
   // flip the plane normal if needed
@@ -313,7 +305,8 @@ bool PoseEstimator::remove_scene_distortion() {
   // Eigen::Vector3f plane_normal(1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
   Eigen::Vector3f plane_normal(0, 1, 0);
   float epsAngle(45.f*M_PI/180.f);
-  return estimate_perpendicular_plane(scene_processed, plane_normal, nullptr,
+  return estimate_perpendicular_plane(scene_processed, plane_normal,
+                               distorted_object_plane_coeffs,
                                scene_processed, nullptr, epsAngle);
 }
 
@@ -398,6 +391,7 @@ void PoseEstimator::process_scene() {
   //                     scale_axis, axis_size);
 }
 
+
 void PoseEstimator::set_object_flip_angles(float rx, float ry, float rz) {
   object_flip_angles[0] = rx * M_PI / 180.f;
   object_flip_angles[1] = ry * M_PI / 180.f;
@@ -408,6 +402,7 @@ void PoseEstimator::set_object_flip_angles(float rx, float ry, float rz) {
     * Eigen::AngleAxisf(object_flip_angles[0], Eigen::Vector3f::UnitX());
   object_flip.block<3, 3>(0, 0) = R;
 }
+
 
 void PoseEstimator::process_object() {
   // Assumes the object has it's Z axis pointing up!
@@ -449,6 +444,7 @@ void PoseEstimator::process_object() {
   // cout << "Scaled object by " << object_scale(0, 0) << "x" << endl;
 }
 
+
 // gives rotation of turntable w.r.t. camera
 PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal) {
   // unit normal to plane
@@ -466,6 +462,7 @@ PoseEstimator::tformT PoseEstimator::get_tabletop_rot(Eigen::Vector3f obj_normal
   return tformT::Identity() + vx + (vx*vx)/(1+dotp);
 }
 
+
 PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in) {
   tformT out = tformT::Identity();
   Eigen::Matrix3f R = in.block<3, 3>(0, 0);
@@ -474,6 +471,7 @@ PoseEstimator::tformT PoseEstimator::invert_pose(PoseEstimator::tformT const &in
 
   return out;
 }
+
 
 PoseEstimator::tformT PoseEstimator::get_object_pose() {
   tformT Tf = tformT::Identity();
@@ -486,6 +484,7 @@ PoseEstimator::tformT PoseEstimator::get_object_pose() {
   return T;
 }
 
+
 PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   PointCloudT::Ptr out = boost::make_shared<PointCloudT>();
   tformT T = get_object_pose();
@@ -494,13 +493,61 @@ PointCloudT::ConstPtr PoseEstimator::get_processed_object() {
   return out;
 }
 
+
 PointXYZ PoseEstimator::get_minpt_offset() {
   PointT ps_min, ps_max, po_min, po_max;
   getMinMax3D(*scene_processed, ps_min, ps_max);
-  getMinMax3D(*get_processed_object(), po_min, po_max);
+
+  PointCloudT::Ptr object_cloud = boost::make_shared<PointCloudT>();
+  if (scene_distorted) {
+    // need to estimate single plane just like we did for the scene,
+    // to avoid translation offset
+    Eigen::Vector3f plane_normal(distorted_object_plane_coeffs->values[0],
+        distorted_object_plane_coeffs->values[1],
+        distorted_object_plane_coeffs->values[2]);
+    float epsAngle(30.f*M_PI/180.f);
+
+    // find 2 planes, keep the nearest one
+    PointCloudT::Ptr object(boost::make_shared<PointCloudT>()),
+        object_rm1(boost::make_shared<PointCloudT>());
+    copyPointCloud(*get_processed_object(), *object);
+    ModelCoefficientsPtr coeffs1(boost::make_shared<ModelCoefficients>()),
+        coeffs2(boost::make_shared<ModelCoefficients>());
+    PointIndicesPtr indices1(boost::make_shared<PointIndices>()),
+        indices2(boost::make_shared<PointIndices>());
+
+    // estimate first plane
+    estimate_perpendicular_plane(object, plane_normal, coeffs1,
+                                 nullptr, indices1, epsAngle);
+    float obj_y(-distorted_object_plane_coeffs->values[3]*
+        distorted_object_plane_coeffs->values[1]);
+    float plane1_y(-coeffs1->values[3]*coeffs1->values[1]);
+
+    // remove first plane
+    ExtractIndices<PointT> extract;
+    extract.setInputCloud(object);
+    extract.setIndices(indices1);
+    extract.setNegative(true);
+    extract.filter(*object_rm1);
+    extract.setNegative(false);
+
+    // estimate second plane
+    estimate_perpendicular_plane(object_rm1, plane_normal, coeffs2,
+                                 nullptr, indices2, epsAngle);
+    float plane2_y(-coeffs2->values[3]*coeffs2->values[1]);
+
+    // choose the plane with smallest distance to origin
+    if (plane1_y > plane2_y) { // plane 2 is closer
+      extract.setInputCloud(object_rm1);
+      extract.setIndices(indices2);
+    } // else, extract is already setup correctly
+    extract.filter(*object_cloud);
+  } else copyPointCloud(*get_processed_object(), *object_cloud);
+  getMinMax3D(*object_cloud, po_min, po_max);
   PointXYZ p(ps_min.x-po_min.x, ps_min.y-po_min.y, ps_min.z-po_min.z);
   return p;
 }
+
 
 // initializes the data for running ICP
 void PoseEstimator::init_icp() {
@@ -521,6 +568,7 @@ void PoseEstimator::init_icp() {
   object_adj_pos(1, 3) += object_init_dy;
   object_adj_pos(2, 3) += object_init_dz;
 }
+
 
 // do ICP
 float PoseEstimator::do_icp() {
@@ -572,6 +620,7 @@ float PoseEstimator::do_icp() {
     return -1.f;
   }
 }
+
 
 float PoseEstimator::do_auto_icp() {
   float min_azim(0), min_x(0), min_y(0), min_z(0), min_r(FLT_MAX);
