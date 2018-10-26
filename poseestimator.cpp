@@ -270,12 +270,13 @@ bool PoseEstimator::estimate_perpendicular_plane(const PointCloudT::ConstPtr &in
                                   ModelCoefficientsPtr coeffs,
                                   PointCloudT::Ptr plane_cloud,
                                   PointIndicesPtr plane_idx,
-                                  float epsAngle) {
+                                  float epsAngle,
+                                  float inlier_thresh) {
   SACSegmentation<PointT> plane_seg;
   plane_seg.setOptimizeCoefficients(true);
   plane_seg.setModelType(SACMODEL_PERPENDICULAR_PLANE);
   plane_seg.setMethodType(SAC_RANSAC);
-  plane_seg.setDistanceThreshold(0.003);  // good value for small plane = 3e-3
+  plane_seg.setDistanceThreshold(inlier_thresh);  // good value for small plane = 3e-3
   plane_seg.setMaxIterations(1e6);
   plane_seg.setAxis(axis);
   plane_seg.setEpsAngle(epsAngle);
@@ -302,9 +303,28 @@ bool PoseEstimator::estimate_perpendicular_plane(const PointCloudT::ConstPtr &in
 
 // fits a single plane to the scene and only keeps the inliers
 bool PoseEstimator::remove_scene_distortion() {
-  // Eigen::Vector3f plane_normal(1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
-  Eigen::Vector3f plane_normal(0, 1, 0);
+  // first, find left-facing plane
+  Eigen::Vector3f plane_normal(1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
   float epsAngle(45.f*M_PI/180.f);
+  PointCloudT::Ptr plane_cloud = boost::make_shared<PointCloudT>();
+  bool done = estimate_perpendicular_plane(scene_processed, plane_normal,
+                               distorted_object_plane_coeffs,
+                               plane_cloud, nullptr, epsAngle);
+  if (distorted_object_plane_coeffs->values[1] < 0) {  //flip
+    distorted_object_plane_coeffs->values[0] *= -1;
+    distorted_object_plane_coeffs->values[1] *= -1;
+    distorted_object_plane_coeffs->values[2] *= -1;
+    distorted_object_plane_coeffs->values[3] *= -1;
+  }
+  float angle = atan2(distorted_object_plane_coeffs->values[1],
+      distorted_object_plane_coeffs->values[0]);
+  // cout << "Left-facing plane angle = " << angle * 180.f / M_PI << endl;
+  if (angle < 80.f*M_PI/180.f && angle > 30.f*M_PI/180.f) {
+    copyPointCloud(*plane_cloud, *scene_processed);
+    return done;
+  }
+  // else, estimate the other plane
+  plane_normal = Eigen::Vector3f(-1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
   return estimate_perpendicular_plane(scene_processed, plane_normal,
                                distorted_object_plane_coeffs,
                                scene_processed, nullptr, epsAngle);

@@ -112,7 +112,8 @@ private:
     pcl::ModelCoefficientsPtr coeffs=nullptr,
     PointCloudT::Ptr plane_cloud=nullptr,
     pcl::PointIndicesPtr plane_idx=nullptr,
-    float epsAngle=20*M_PI/180.f);
+    float epsAngle=20*M_PI/180.f,
+    float inlier_thresh=0.003);
 
   float scene_leaf_size, object_leaf_size;
   float scene_boxsize_x, scene_boxsize_y, scene_boxsize_z;

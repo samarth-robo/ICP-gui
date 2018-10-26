@@ -155,9 +155,9 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   pe->set_icp_symmetric_object(symmetric_object);
   pe->set_azim_search_range(azim_search_range);
   pe->set_icp_only_xy(only_xy);
+  pe->set_scene_distorted(scene_distorted);
   for (int i=0; i<pc_filenames.size(); i++) {
     string pc_filename(pc_filenames[i].string());
-    if (i > 0) pe->set_scene_distorted(scene_distorted);
     if (!process_view(pc_filename, base_dir)) {
       PCL_ERROR("Error processing view %s\n", pc_filename.c_str());
       return false;
