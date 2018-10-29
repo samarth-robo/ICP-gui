@@ -305,11 +305,11 @@ bool PoseEstimator::estimate_perpendicular_plane(const PointCloudT::ConstPtr &in
 bool PoseEstimator::remove_scene_distortion() {
   // first, find left-facing plane
   Eigen::Vector3f plane_normal(1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
-  float epsAngle(45.f*M_PI/180.f);
+  float epsAngle(45.f*M_PI/180.f), inlier_thresh(10e-3);
   PointCloudT::Ptr plane_cloud = boost::make_shared<PointCloudT>();
   bool done = estimate_perpendicular_plane(scene_processed, plane_normal,
                                distorted_object_plane_coeffs,
-                               plane_cloud, nullptr, epsAngle);
+                               plane_cloud, nullptr, epsAngle, inlier_thresh);
   if (distorted_object_plane_coeffs->values[1] < 0) {  //flip
     distorted_object_plane_coeffs->values[0] *= -1;
     distorted_object_plane_coeffs->values[1] *= -1;
@@ -319,15 +319,15 @@ bool PoseEstimator::remove_scene_distortion() {
   float angle = atan2(distorted_object_plane_coeffs->values[1],
       distorted_object_plane_coeffs->values[0]);
   // cout << "Left-facing plane angle = " << angle * 180.f / M_PI << endl;
-  if (angle < 80.f*M_PI/180.f && angle > 30.f*M_PI/180.f) {
+  if (angle < 70.f*M_PI/180.f && angle > 30.f*M_PI/180.f) {
     copyPointCloud(*plane_cloud, *scene_processed);
     return done;
   }
   // else, estimate the other plane
-  plane_normal = Eigen::Vector3f(-1.f/sqrt(2.f), 1.f/sqrt(2.f), 0);
+  plane_normal = Eigen::Vector3f(0, 1, 0);
   return estimate_perpendicular_plane(scene_processed, plane_normal,
                                distorted_object_plane_coeffs,
-                               scene_processed, nullptr, epsAngle);
+                               scene_processed, nullptr, epsAngle, inlier_thresh);
 }
 
 
@@ -530,6 +530,8 @@ PointXYZ PoseEstimator::get_minpt_offset() {
     // find 2 planes, keep the nearest one
     PointCloudT::Ptr object(boost::make_shared<PointCloudT>()),
         object_rm1(boost::make_shared<PointCloudT>());
+    PointCloudT::Ptr plane1_cloud(boost::make_shared<PointCloudT>()),
+        plane2_cloud(boost::make_shared<PointCloudT>());
     copyPointCloud(*get_processed_object(), *object);
     ModelCoefficientsPtr coeffs1(boost::make_shared<ModelCoefficients>()),
         coeffs2(boost::make_shared<ModelCoefficients>());
@@ -538,10 +540,11 @@ PointXYZ PoseEstimator::get_minpt_offset() {
 
     // estimate first plane
     estimate_perpendicular_plane(object, plane_normal, coeffs1,
-                                 nullptr, indices1, epsAngle);
-    float obj_y(-distorted_object_plane_coeffs->values[3]*
-        distorted_object_plane_coeffs->values[1]);
-    float plane1_y(-coeffs1->values[3]*coeffs1->values[1]);
+                                 plane1_cloud, indices1, epsAngle);
+    // float plane1_y(-coeffs1->values[3]*coeffs1->values[1]);
+    float plane1_y(0);
+    for (const auto &p: plane1_cloud->points) plane1_y += p.y;
+    plane1_y /= plane1_cloud->size();
 
     // remove first plane
     ExtractIndices<PointT> extract;
@@ -553,8 +556,11 @@ PointXYZ PoseEstimator::get_minpt_offset() {
 
     // estimate second plane
     estimate_perpendicular_plane(object_rm1, plane_normal, coeffs2,
-                                 nullptr, indices2, epsAngle);
-    float plane2_y(-coeffs2->values[3]*coeffs2->values[1]);
+                                 plane2_cloud, indices2, epsAngle);
+    // float plane2_y(-coeffs2->values[3]*coeffs2->values[1]);
+    float plane2_y(0);
+    for (const auto &p: plane2_cloud->points) plane2_y += p.y;
+    plane2_y /= plane2_cloud->size();
 
     // choose the plane with smallest distance to origin
     if (plane1_y > plane2_y) { // plane 2 is closer
