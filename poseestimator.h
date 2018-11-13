@@ -140,7 +140,7 @@ private:
   Eigen::Vector3f object_flip_angles;  // angles for flipping object model
   tformT T_b_f, T_c_b, T_f_o, T_icp, T_b_f_offset;  // needed for pose suggestions
   bool T_b_f_offset_locked;
-  float white_thresh;  // color threshold for white object segmentation
+  float white_thresh;  // color threshold for white object segmentation (set to -ve to deactivate)
   float azim_search_range, azim_search_step;
   // objects for restricting ICP degrees of freedom
   typedef pcl::registration::TransformationEstimationLM<PointT, PointT> TELM;

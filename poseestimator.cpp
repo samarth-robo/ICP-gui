@@ -35,7 +35,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
-  white_thresh(100.f),
+  white_thresh(-1),
   te_lm(boost::make_shared<TELM>()),
   warp_no_azim(boost::make_shared<WarpNoAzim>()),
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
@@ -96,7 +96,7 @@ PointXYZ PoseEstimator::get_scene_box_min_pt() {
     PointXYZ p;
     p.x = object_init_x - scene_boxsize_x/2;
     // p.y = object_init_y - scene_boxsize_y;
-    p.y = object_init_y - 0.15;
+    p.y = object_init_y - scene_boxsize_y + 0.05;
     p.z = object_init_z - scene_boxsize_z/2;
     return p;
 }
@@ -118,7 +118,8 @@ void PoseEstimator::crop_subsample_scene() {
 
   CropBox<PointT> box;
   box.setInputCloud(subs);
-  box.setMin(Eigen::Vector4f(-scene_boxsize_x/2, -0.15, -scene_boxsize_z/2, 0));
+  box.setMin(Eigen::Vector4f(-scene_boxsize_x/2, -scene_boxsize_y+0.05,
+                             -scene_boxsize_z/2, 0));
   box.setMax(Eigen::Vector4f(+scene_boxsize_x/2, 0.05, +scene_boxsize_z/2, 0));
   box.setTranslation(Eigen::Vector3f(object_init_x, object_init_y,
                                      object_init_z));
@@ -176,19 +177,21 @@ bool PoseEstimator::estimate_plane_params(std::string from_filename) {
       return false;
     }
   } else {  // estimate plane by RANSAC
-    // keep only non-white points for better plane estimate
-    PointIndicesPtr idx = boost::make_shared<PointIndices>();
-    for (int i=0; i<scene_cropped_subsampled->size(); i++) {
-      const auto &p = scene_cropped_subsampled->at(i);
-      float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
-      if (gray < white_thresh) idx->indices.push_back(i);
-    }
-    ExtractIndices<PointT> extract;
-    extract.setInputCloud(scene_cropped_subsampled);
-    extract.setNegative(false);
-    extract.setIndices(idx);
     PointCloudT::Ptr tt_points = boost::make_shared<PointCloudT>();
-    extract.filter(*tt_points);
+    if (white_thresh > 0) {
+      // keep only non-white points for better plane estimate
+      PointIndicesPtr idx = boost::make_shared<PointIndices>();
+      for (int i=0; i<scene_cropped_subsampled->size(); i++) {
+        const auto &p = scene_cropped_subsampled->at(i);
+        float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
+        if (gray < white_thresh) idx->indices.push_back(i);
+      }
+      ExtractIndices<PointT> extract;
+      extract.setInputCloud(scene_cropped_subsampled);
+      extract.setNegative(false);
+      extract.setIndices(idx);
+      extract.filter(*tt_points);
+    } else copyPointCloud(*scene_cropped_subsampled, *tt_points);
 
     if (!estimate_perpendicular_plane(tt_points, tt_axis, scene_plane_coeffs,
                                       nullptr, nullptr, 10*M_PI/180.f)) {
@@ -361,15 +364,17 @@ void PoseEstimator::process_scene() {
   extract.filter(*scene_processed);
 
   // segment out the white object
-  idx->indices.clear();
-  for (int i=0; i<scene_processed->size(); i++) {
-    const auto &p = scene_processed->at(i);
-    float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
-    if (gray > white_thresh) idx->indices.push_back(i);
+  if (white_thresh > 0) {
+    idx->indices.clear();
+    for (int i=0; i<scene_processed->size(); i++) {
+      const auto &p = scene_processed->at(i);
+      float gray = 0.21*p.r + 0.72*p.g + 0.07*p.b;
+      if (gray > white_thresh) idx->indices.push_back(i);
+    }
+    extract.setInputCloud(scene_processed);
+    extract.setIndices(idx);
+    extract.filter(*scene_processed);
   }
-  extract.setInputCloud(scene_processed);
-  extract.setIndices(idx);
-  extract.filter(*scene_processed);
 
   // fudge factor
   tformT T_fudge = tformT::Identity();
