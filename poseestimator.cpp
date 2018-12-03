@@ -35,7 +35,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
-  white_thresh(-1),
+  white_thresh(100.f),
   te_lm(boost::make_shared<TELM>()),
   warp_no_azim(boost::make_shared<WarpNoAzim>()),
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
@@ -656,8 +656,10 @@ float PoseEstimator::do_icp() {
 float PoseEstimator::do_auto_icp() {
   float min_azim(0), min_x(0), min_y(0), min_z(0), min_r(FLT_MAX);
   tformT minT;
-  float prev_object_init_azim(object_init_azim), prev_object_init_dx(object_init_dx),
-      prev_object_init_dy(object_init_dy), prev_object_init_dz(object_init_dz);
+  float prev_object_init_azim(object_init_azim),
+      prev_object_init_dx(object_init_dx / 100.f),
+      prev_object_init_dy(object_init_dy / 100.f),
+      prev_object_init_dz(object_init_dz / 100.f);
   // cm
   float x_min(prev_object_init_dx - 0.f), x_max(prev_object_init_dx + 0.f),
       x_step(2.f);
