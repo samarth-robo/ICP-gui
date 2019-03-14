@@ -35,7 +35,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   T_f_o(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
-  white_thresh(100.f),
+  white_thresh(100.f),  // Zero out for palm_print, otherwise 100.f
   te_lm(boost::make_shared<TELM>()),
   warp_no_azim(boost::make_shared<WarpNoAzim>()),
   warp_no_rotation(boost::make_shared<WarpNoRotation>()),
