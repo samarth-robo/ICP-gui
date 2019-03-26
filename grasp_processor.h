@@ -11,7 +11,11 @@ class GraspProcessor
 {
 public:
   GraspProcessor(std::string data_dir);
-  bool process_grasp(std::string object_name, std::string session_name,
+  bool process_multiple_views(std::string object_name, std::string session_name,
+                     bool no_rollpitch, bool symmetric_object, bool only_xy,
+                     float azim_search_range, bool scene_distorted,
+                     std::string plane_from=std::string());
+  bool process_single_view(std::string object_name, std::string session_name,
                      bool no_rollpitch, bool symmetric_object, bool only_xy,
                      float azim_search_range, bool scene_distorted,
                      std::string plane_from=std::string());
@@ -24,7 +28,8 @@ private:
   std::string real_object_name;
   std::string plane_from_filename;
 
-  bool process_view(bfs::path pc_filename, bfs::path base_dir);
+  bool process_view(bfs::path pc_filename, bfs::path base_dir,
+      bool single_view=false);
 };
 
 #endif // GRASP_PROCESSOR_H

@@ -33,6 +33,7 @@ PoseEstimator::PoseEstimator(PointCloudT::ConstPtr const &scene_,
   object_init_dx(0), object_init_dy(0), object_init_dz(0),
   forced_object_scale(1.f),
   T_f_o(PoseEstimator::tformT::Identity()),
+  T_b_f(PoseEstimator::tformT::Identity()),
   T_icp(PoseEstimator::tformT::Identity()),
   object_flip(PoseEstimator::tformT::Identity()),
   white_thresh(100.f),  // Zero out for palm_print, otherwise 100.f

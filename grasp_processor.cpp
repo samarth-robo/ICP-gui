@@ -16,7 +16,101 @@ GraspProcessor::GraspProcessor(string data_dir) :
   std::srand(std::time(NULL));
 }
 
-bool GraspProcessor::process_grasp(string object_name, string session_name,
+
+bool GraspProcessor::process_single_view(string object_name,
+                                   string session_name,
+                                   bool no_rollpitch, bool symmetric_object,
+                                   bool only_xy, float azim_search_range,
+                                   bool scene_distorted, string plane_from) {
+  if (no_rollpitch) cout << "No roll/pitch" << endl;
+  if (symmetric_object) cout << "Symmetric object" << endl;
+  if (only_xy) cout << "Only XY" << endl;
+  if (azim_search_range != 360.f)
+    cout << "Azimuth search range " << -azim_search_range/2.f << " : "
+         << azim_search_range/2.f << endl;
+  if (!plane_from.empty()) {
+    cout << "Getting plane estimate from " << plane_from << endl;
+    bfs::path p = data_dir / session_name / plane_from / "poses"
+        / "tt_base_processed.txt";
+    plane_from_filename = p.string();
+  } else plane_from_filename = string();
+  if (scene_distorted) cout << "Scene distorted" << endl;
+  // paths
+  bfs::path base_dir = data_dir / session_name / object_name;
+  bfs::path pc_filename = base_dir / "hand_pose" / "object_pose.pcd";
+  if (!bfs::is_regular_file(pc_filename)) {
+    PCL_ERROR("%s does not exist.", pc_filename.string().c_str());
+    return false;
+  }
+
+  // read object name
+  bfs::path object_name_filename = base_dir / "object_name.txt";
+  ifstream f(object_name_filename.string());
+  if (f.is_open()) {
+    f >> real_object_name;
+    f.close();
+  } else {
+    PCL_ERROR("Could not open %s for reading\n",
+              object_name_filename.string().c_str());
+    return false;
+  }
+  // cout << "Object name is " << real_object_name << endl;
+
+  // read init XYZ info from txt file
+  bfs::path tt_base_filename = base_dir / "poses" / "tt_base.txt";
+  f.open(tt_base_filename.string());
+  if (!f.is_open()) {
+    console::print_error("Could not open %s for reading\n",
+                         tt_base_filename.string().c_str());
+    return false;
+  }
+  Eigen::Matrix4f T = Eigen::Matrix4f::Identity();
+  float x;
+  f >> x; T(0, 3) = x;
+  f >> x; T(1, 3) = x;
+  f >> x; T(2, 3) = x;
+  f >> x; T(0, 0) = x;
+  f >> x; T(0, 1) = x;
+  f >> x; T(0, 2) = x;
+  f >> x; T(1, 0) = x;
+  f >> x; T(1, 1) = x;
+  f >> x; T(1, 2) = x;
+  f >> x; T(2, 0) = x;
+  f >> x; T(2, 1) = x;
+  f >> x; T(2, 2) = x;
+  f.close();
+  pe->set_tt_pose(T);
+
+  // read parameters for flipping object
+  bfs::path flip_filename = base_dir / "hand_pose" / "object_flip.txt";
+  f.open(flip_filename.string());
+  float object_flip_x(0), object_flip_y(0), object_flip_z(0);
+  float object_slide_x(0), object_slide_y(0), object_slide_z(0);
+  if (!f.is_open())
+      cout << "WARN: could not read flip parameters, setting to 0" << endl;
+  f >> object_slide_x >> object_slide_y >> object_slide_z
+      >> object_flip_x >> object_flip_y >> object_flip_z;
+  // degrees
+  pe->set_object_flip_angles(object_flip_x, object_flip_y, object_flip_z);
+  // cm
+  pe->set_object_slide(object_slide_x, object_slide_y, object_slide_z);
+
+  // process the view
+  pe->set_icp_no_rollpitch(no_rollpitch);
+  pe->set_icp_symmetric_object(symmetric_object);
+  pe->set_azim_search_range(azim_search_range);
+  pe->set_icp_only_xy(only_xy);
+  pe->set_scene_distorted(scene_distorted);
+  if (!process_view(pc_filename, base_dir, true)) {
+    PCL_ERROR("Error processing view %s\n", pc_filename.c_str());
+    return false;
+  }
+  return true;
+}
+
+
+bool GraspProcessor::process_multiple_views(string object_name,
+                                   string session_name,
                                    bool no_rollpitch, bool symmetric_object,
                                    bool only_xy, float azim_search_range,
                                    bool scene_distorted, string plane_from) {
@@ -171,7 +265,11 @@ bool GraspProcessor::process_grasp(string object_name, string session_name,
   return true;
 }
 
-bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
+bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir,
+    bool single_view) {
+  string s(pc_filename.stem().string());
+  string scene_id = s.substr(0, s.find_first_of('.'));
+  
   // load scene
   if (io::loadPCDFile<PointT>(pc_filename.string(), *scene_cloud) == -1) {
     PCL_ERROR("Could not load file %s\n", pc_filename.string().c_str());
@@ -196,11 +294,11 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
   }
 
   // read turntable state
-  string s(pc_filename.stem().string());
-  string scene_id = s.substr(0, s.find_first_of('.'));
-  bfs::path T_b_f_filename = base_dir / "poses"
+  if (!single_view) {
+    bfs::path T_b_f_filename = base_dir / "poses"
       / (string("tt_frame_") + scene_id + ".txt");
-  pe->set_T_b_f(T_b_f_filename.string());
+    pe->set_T_b_f(T_b_f_filename.string());
+  }
 
   // estimate plane
   bool plane_estimated(false);
@@ -211,13 +309,15 @@ bool GraspProcessor::process_view(bfs::path pc_filename, bfs::path base_dir) {
     }
     plane_estimated = true;
     // cout << "Plane estimated" << endl;
-    bfs::path tt_base_filename = base_dir / "poses" / "tt_base_processed.txt";
-    if (pe->write_tt_file(tt_base_filename.string())) {
-      plane_locked = true;
-      // cout << tt_base_filename.string() << " written" << endl;
-    } else {
-      cout << "Could not open " << tt_base_filename << " for writing" << endl;
-      return false;
+    if (!single_view) {
+      bfs::path tt_base_filename = base_dir / "poses" / "tt_base_processed.txt";
+      if (pe->write_tt_file(tt_base_filename.string())) {
+        plane_locked = true;
+        // cout << tt_base_filename.string() << " written" << endl;
+      } else {
+        cout << "Could not open " << tt_base_filename << " for writing" << endl;
+        return false;
+      }
     }
   } else {
     plane_estimated = true;
